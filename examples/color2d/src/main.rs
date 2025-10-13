@@ -51,7 +51,7 @@ fn setup(
             ui.spawn((
                 Name::new("Text"),
                 // Set the layout position of this text
-                UiLayout::window().pos(Rl(50.0)).anchor(Anchor::Center).pack(), UiDepth::Add(5.0),
+                UiLayout::window().pos(Rl(50.0)).anchor(Anchor::CENTER).pack(), UiDepth::Add(5.0),
                 // This controls the height of the text, so 10% of the parent's node height
                 UiTextSize::from(Rh(10.0)),
                 // Set the starting text value
@@ -59,7 +59,7 @@ fn setup(
                 // Set the text animation
                 TextAnimator::new("Hello 2D UI!"),
                 // Style the text font
-                TextFont::from_font(assets.load("fonts/Rajdhani-Bold.ttf")).with_font_size(64.0),
+                TextFont::default().with_font(assets.load("fonts/Rajdhani-Bold.ttf")).with_font_size(64.0),
             ));
 
             // Spawn a color filled node
@@ -74,9 +74,9 @@ fn setup(
                 // On hover change the cursor to this
                 OnHoverSetCursor::new(SystemCursorIcon::Pointer),
             ))
-            .observe(|_: Trigger<Pointer<Out>>| info!("Moving out!") )
-            .observe(|_: Trigger<Pointer<Over>>| info!("Moving in!") )
-            .observe(|_: Trigger<Pointer<Click>>| info!("Click!") );
+            .observe(|_: On<Pointer<Out>>| info!("Moving out!") )
+            .observe(|_: On<Pointer<Over>>| info!("Moving in!") )
+            .observe(|_: On<Pointer<Click>>| info!("Click!") );
         });
     });
 }
