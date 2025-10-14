@@ -48,7 +48,7 @@ pub mod prelude {
 /// # });
 /// # }
 /// ```
-#[derive(Component, Reflect, Clone, PartialEq, Debug)]
+#[derive(Component, Reflect, Clone, Debug)]
 pub struct UiHover {
     value: f32,
     /// If the state is enabled

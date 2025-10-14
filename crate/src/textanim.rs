@@ -9,7 +9,7 @@ enum DurationMode {
 }
 
 /// This component modifies attached [`Text2d`] with a modified string outputted from a time dependant function.
-#[derive(Component, Reflect, Clone, PartialEq, Debug)]
+#[derive(Component, Reflect, Clone, Debug)]
 #[reflect(from_reflect = false)]
 pub struct TextAnimator {
     string: String,

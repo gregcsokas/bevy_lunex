@@ -77,24 +77,22 @@ fn system_cursor_icon_queue_apply(
         data.top_priority = top_priority;
         data.top_request = top_request;
 
-        if let Some(window) = data.window {
-            if let Ok(window_cursor_option) = windows.get_mut(window) {
+        if let Some(window) = data.window && let Ok(window_cursor_option) = windows.get_mut(window) {
 
-                // Apply the cursor icon somehow
-                if let Some(mut window_cursor) = window_cursor_option {
-                    #[allow(clippy::single_match)]
-                    match window_cursor.as_mut() {
-                        CursorIcon::System(previous) => {
-                            if *previous != data.top_request {
-                                *previous = data.top_request;
-                            }
-                        },
-                        _ => {},
-                    }
-
-                } else {
-                    commands.entity(window).insert(CursorIcon::System(data.top_request));
+            // Apply the cursor icon somehow
+            if let Some(mut window_cursor) = window_cursor_option {
+                #[allow(clippy::single_match)]
+                match window_cursor.as_mut() {
+                    CursorIcon::System(previous) => {
+                        if *previous != data.top_request {
+                            *previous = data.top_request;
+                        }
+                    },
+                    _ => {},
                 }
+
+            } else {
+                commands.entity(window).insert(CursorIcon::System(data.top_request));
             }
         }
     }
@@ -110,10 +108,8 @@ fn system_cursor_icon_queue_purge(
     for (pointer, data) in &mut queue.pointers {
 
         // Remove invalid pointers
-        if let Some(window) = data.window {
-            if windows.get_mut(window).is_err() {
-                to_remove.push(*pointer);
-            }
+        if let Some(window) = data.window && windows.get_mut(window).is_err() {
+            to_remove.push(*pointer);
         }
 
         // Remove despawned entities
@@ -162,14 +158,12 @@ fn observer_cursor_request_cursor_icon(mut trigger: On<Pointer<Over>>, mut point
     for (pointer, location, is_gamepad) in pointers.iter_mut().filter(|(p_id, _, _)| id == **p_id) {
 
         // Check if the pointer is attached to a window
-        if let Some(location) = &location.location {
-            if let NormalizedRenderTarget::Window(window) = location.target {
+        if let Some(location) = &location.location && let NormalizedRenderTarget::Window(window) = location.target {
 
-                // Request a cursor change
-                if let Ok(requestee) = query.get(trigger.event_target()) {
-                    trigger.propagate(false);
-                    queue.request_cursor(*pointer, if is_gamepad { None } else { Some(window.entity()) }, trigger.event_target(), requestee.cursor, 1);
-                }
+            // Request a cursor change
+            if let Ok(requestee) = query.get(trigger.event_target()) {
+                trigger.propagate(false);
+                queue.request_cursor(*pointer, if is_gamepad { None } else { Some(window.entity()) }, trigger.event_target(), requestee.cursor, 1);
             }
         }
     }
@@ -181,14 +175,12 @@ fn observer_cursor_cancel_cursor_icon(mut trigger: On<Pointer<Out>>, mut pointer
     for (pointer, location) in pointers.iter_mut().filter(|(p_id, _)| id == **p_id) {
 
         // Check if the pointer is attached to a window
-        if let Some(location) = &location.location {
-            if matches!(location.target, NormalizedRenderTarget::Window(_)) {
+        if let Some(location) = &location.location && matches!(location.target, NormalizedRenderTarget::Window(_)) {
 
-                // Cancel existing cursor icon request if applicable
-                if query.get(trigger.event_target()).is_ok() {
-                    trigger.propagate(false);
-                    queue.cancel_cursor(*pointer, &trigger.event_target());
-                }
+            // Cancel existing cursor icon request if applicable
+            if query.get(trigger.event_target()).is_ok() {
+                trigger.propagate(false);
+                queue.cancel_cursor(*pointer, &trigger.event_target());
             }
         }
     }
@@ -284,13 +276,11 @@ fn system_cursor_hide_native(
     query: Query<(&PointerLocation, Has<GamepadCursor>), With<SoftwareCursor>>
 ) {
     for (pointer_location, is_gamepad) in &query {
-        if let Some(location) = &pointer_location.location {
-            if let NormalizedRenderTarget::Window(window) = location.target {
-                if let Ok(mut cursor_options) = windows.get_mut(window.entity()) {
+        if let Some(location) = &pointer_location.location
+            && let NormalizedRenderTarget::Window(window) = location.target
+                && let Ok(mut cursor_options) = windows.get_mut(window.entity()) {
                     cursor_options.visible = is_gamepad;
                 }
-            }
-        }
     }
 }
 
@@ -300,10 +290,8 @@ fn system_cursor_software_change_icon(
     mut query: Query<(&PointerId, &SoftwareCursor, &mut Sprite)>
 ) {
     for (pointer_id, software_cursor, mut sprite) in &mut query {
-        if let Some(atlas) = &mut sprite.texture_atlas {
-            if let Some(icon_data) = icons.pointers.get(pointer_id) {
-                atlas.index = software_cursor.cursor_atlas_map.get(&icon_data.top_request).unwrap_or(&(0, Vec2::ZERO)).0;
-            }
+        if let Some(atlas) = &mut sprite.texture_atlas && let Some(icon_data) = icons.pointers.get(pointer_id) {
+            atlas.index = software_cursor.cursor_atlas_map.get(&icon_data.top_request).unwrap_or(&(0, Vec2::ZERO)).0;
         }
     }
 }
@@ -315,12 +303,10 @@ fn system_cursor_gamepad_assign(
     gamepads: Query<(Entity, &Gamepad), Without<GamepadAttachedCursor>>,
 ) {
     let mut gamepads = gamepads.iter();
-    if let Some((cursor, _, _)) = cursors.iter().next() {
-        if let Some((gamepad, _)) = gamepads.next() {
-            commands.entity(cursor).insert(GamepadAttachedCursor(gamepad));
-            commands.entity(gamepad).insert(GamepadAttachedCursor(cursor));
-            info!("Gamepad {gamepad} bound to cursor {cursor}");
-        }
+    if let Some((cursor, _, _)) = cursors.iter().next() && let Some((gamepad, _)) = gamepads.next() {
+        commands.entity(cursor).insert(GamepadAttachedCursor(gamepad));
+        commands.entity(gamepad).insert(GamepadAttachedCursor(cursor));
+        info!("Gamepad {gamepad} bound to cursor {cursor}");
     }
 }
 

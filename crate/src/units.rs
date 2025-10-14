@@ -918,52 +918,37 @@ impl NiceDisplay for Anchor {
 impl NiceDisplay for UiValue<f32> {
     fn to_nicestr(&self) -> String {
         let mut t = String::new();
-        if let Some(v) = self.ab {
-            if v != 0.0 {
-                t = format!("{}", format!("{v:.00}").bright_blue());
-            }
+        if let Some(v) = self.ab && v != 0.0 {
+            t = format!("{}", format!("{v:.00}").bright_blue());
         }
-        if let Some(v) = self.rl {
-            if v != 0.0 {
-                if !t.is_empty() { t += " + " };
-                t = format!("{}{}{}", t, format!("{v:.00}").bright_green(), "%".bright_green());
-            }
+        if let Some(v) = self.rl && v != 0.0 {
+            if !t.is_empty() { t += " + " };
+            t = format!("{}{}{}", t, format!("{v:.00}").bright_green(), "%".bright_green());
         }
-        if let Some(v) = self.rw {
-            if v != 0.0 {
-                if !t.is_empty() { t += " + " };
-                t = format!("{}{}{}", t, format!("{v:.00}").bright_green(), "%w".bright_green());
-            }
+        if let Some(v) = self.rw && v != 0.0 {
+            if !t.is_empty() { t += " + " };
+            t = format!("{}{}{}", t, format!("{v:.00}").bright_green(), "%w".bright_green());
         }
-        if let Some(v) = self.rh {
-            if v != 0.0 {
+        if let Some(v) = self.rh
+            && v != 0.0 {
                 if !t.is_empty() { t += " + " };
                 t = format!("{}{}{}", t, format!("{v:.00}").bright_green(), "%h".bright_green());
             }
+        if let Some(v) = self.em && v != 0.0 {
+            if !t.is_empty() { t += " + " };
+            t = format!("{}{}{}", t, format!("{v:.00}").bright_red(), "m".bright_red());
         }
-        if let Some(v) = self.em {
-            if v != 0.0 {
-                if !t.is_empty() { t += " + " };
-                t = format!("{}{}{}", t, format!("{v:.00}").bright_red(), "m".bright_red());
-            }
+        if let Some(v) = self.vp && v != 0.0 {
+            if !t.is_empty() { t += " + " };
+            t = format!("{}{}{}", t, format!("{v:.00}").bright_green(), "v%".bright_green());
         }
-        if let Some(v) = self.vp {
-            if v != 0.0 {
-                if !t.is_empty() { t += " + " };
-                t = format!("{}{}{}", t, format!("{v:.00}").bright_green(), "v%".bright_green());
-            }
+        if let Some(v) = self.vw && v != 0.0 {
+            if !t.is_empty() { t += " + " };
+            t = format!("{}{}{}", t, format!("{v:.00}").bright_green(), "v%w".bright_green());
         }
-        if let Some(v) = self.vw {
-            if v != 0.0 {
-                if !t.is_empty() { t += " + " };
-                t = format!("{}{}{}", t, format!("{v:.00}").bright_green(), "v%w".bright_green());
-            }
-        }
-        if let Some(v) = self.vh {
-            if v != 0.0 {
-                if !t.is_empty() { t += " + " };
-                t = format!("{}{}{}", t, format!("{v:.00}").bright_green(), "v%h".bright_green());
-            }
+        if let Some(v) = self.vh && v != 0.0 {
+            if !t.is_empty() { t += " + " };
+            t = format!("{}{}{}", t, format!("{v:.00}").bright_green(), "v%h".bright_green());
         }
         if t.is_empty() { t = format!("{}", "0".bright_blue()); };
         format!("{}", t.black())

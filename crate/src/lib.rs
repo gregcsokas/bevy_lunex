@@ -130,10 +130,8 @@ pub fn system_embedd_resize(
     mut images: ResMut<Assets<Image>>,
 ) {
     for (sprite, dimension) in &query {
-        if let Some(image) = images.get_mut(&sprite.image) {
-            if **dimension != Vec2::ZERO {
-                image.resize(bevy_render::render_resource::Extent3d { width: dimension.x as u32, height: dimension.y as u32, ..Default::default() });
-            }
+        if let Some(image) = images.get_mut(&sprite.image) && **dimension != Vec2::ZERO {
+            image.resize(bevy_render::render_resource::Extent3d { width: dimension.x as u32, height: dimension.y as u32, ..Default::default() });
         }
     }
 }
@@ -971,10 +969,8 @@ pub fn system_mesh_3d_reconstruct_from_dimension(
 ) {
     for (dimension, mut mesh, aabb_option) in &mut query {
         let plane_mesh = Mesh::from(Rectangle::new(dimension.x, dimension.y));
-        if let Some(a) = plane_mesh.compute_aabb() {
-            if let Some(mut aabb) = aabb_option {
-                *aabb = a;
-            }
+        if let Some(a) = plane_mesh.compute_aabb() && let Some(mut aabb) = aabb_option {
+            *aabb = a;
         }
         mesh.0 = meshes.add(plane_mesh);
     }
@@ -987,10 +983,8 @@ pub fn system_mesh_2d_reconstruct_from_dimension(
 ) {
     for (dimension, mut mesh, aabb_option) in &mut query {
         let plane_mesh = Mesh::from(Rectangle::new(dimension.x, dimension.y));
-        if let Some(a) = plane_mesh.compute_aabb() {
-            if let Some(mut aabb) = aabb_option {
-                *aabb = a;
-            }
+        if let Some(a) = plane_mesh.compute_aabb()  && let Some(mut aabb) = aabb_option {
+            *aabb = a;
         }
         mesh.0 = meshes.add(plane_mesh);
     }
@@ -1173,12 +1167,8 @@ pub fn system_color(
             if let Some(mat) = materials2d.get_mut(id) {
                 mat.color = blend_color.into();
             }
-        } else if let Some(id) = mat3d {
-            if let Some(materials3d) = &mut materials3d {
-                if let Some(mat) = materials3d.get_mut(id) {
-                    mat.base_color = blend_color.into();
-                }
-            }
+        } else if let Some(id) = mat3d && let Some(materials3d) = &mut materials3d && let Some(mat) = materials3d.get_mut(id) {
+            mat.base_color = blend_color.into();
         }
     }
 }
