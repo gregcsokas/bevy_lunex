@@ -6,13 +6,16 @@ pub (crate) use std::any::TypeId;
 
 pub (crate) use bevy_asset::prelude::*;
 pub (crate) use bevy_app::prelude::*;
+use bevy_camera::{primitives::{Aabb, MeshAabb}, visibility::{RenderLayers, VisibilityClass}, Camera, ClearColorConfig};
 pub (crate) use bevy_color::prelude::*;
 pub (crate) use bevy_ecs::prelude::*;
 pub (crate) use bevy_math::prelude::*;
+pub (crate) use bevy_mesh::prelude::*;
 pub (crate) use bevy_text::prelude::*;
+pub (crate) use bevy_camera::prelude::*;
 pub (crate) use bevy_sprite::prelude::*;
+pub (crate) use bevy_sprite_render::prelude::*;
 pub (crate) use bevy_image::prelude::*;
-pub (crate) use bevy_render::prelude::*;
 pub (crate) use bevy_platform::prelude::*;
 pub (crate) use bevy_reflect::prelude::*;
 pub (crate) use bevy_transform::prelude::*;
@@ -28,15 +31,12 @@ pub (crate) use bevy_derive::*;
 
 
 pub(crate) use bevy_app::PluginGroupBuilder;
-use bevy_render::view::{self, VisibilityClass};
 pub(crate) use bevy_sprite::Anchor;
 pub(crate) use bevy_text::TextLayoutInfo;
 pub(crate) use bevy_platform::collections::HashMap;
-pub(crate) use bevy_render::view::RenderLayers;
 pub(crate) use colored::Colorize;
 #[cfg(feature = "text3d")]
 pub(crate) use bevy_rich_text3d::*;
-pub(crate) use bevy_render::{primitives::Aabb, mesh::MeshAabb};
 
 // Imports from this crate
 pub mod prelude {
@@ -82,8 +82,8 @@ pub mod prelude {
     pub use bevy_sprite::Anchor;
     #[cfg(feature = "text3d")]
     pub use bevy_rich_text3d::*;
-    #[cfg(feature = "text3d")]
-    pub use bevy_text::cosmic_text::Weight;
+    // #[cfg(feature = "text3d")]
+    // pub use cosmic_text::Weight;
 }
 
 // Link files
@@ -166,7 +166,7 @@ impl ImageTextureConstructor for Image {}
 pub trait CameraTextureRenderConstructor {
     /// Just a utility constructor for camera that renders to a transparent texture
     fn clear_render_to(handle: Handle<Image>) -> Camera {
-        use bevy_render::camera::RenderTarget;
+        use bevy_camera::RenderTarget;
         Camera {
             target: RenderTarget::Image(handle.into()),
             clear_color: ClearColorConfig::Custom(Color::srgba(0.0, 0.0, 0.0, 0.0)),
@@ -207,7 +207,7 @@ impl CameraTextureRenderConstructor for Camera {
 /// ```
 #[derive(Component, Reflect, Clone, PartialEq, Debug)]
 #[require(Visibility, Transform, Dimension, VisibilityClass)]
-#[component(on_add = view::add_visibility_class::<UiLayoutRoot>)]
+#[component(on_add = bevy_camera::visibility::add_visibility_class::<UiLayoutRoot>)]
 pub struct UiLayoutRoot {
     abs_scale: f32,
 }
@@ -270,7 +270,7 @@ pub struct RecomputeUiLayout;
 
 /// This observer will mutably touch [`UiLayoutRoot`] which will trigger [`system_layout_compute`].
 pub fn observer_touch_layout_root(
-    _trigger: Trigger<RecomputeUiLayout>,
+    _trigger: On<RecomputeUiLayout>,
     mut query: Query<&mut UiLayoutRoot>,
 ){
     for mut root in &mut query {
@@ -444,7 +444,7 @@ pub fn system_debug_print_data(
 /// ```
 #[derive(Component, Reflect, Clone, PartialEq, Debug)]
 #[require(Visibility, Transform, Dimension, VisibilityClass, UiState, UiDepth)]
-#[component(on_add = view::add_visibility_class::<UiLayout>)]
+#[component(on_add = bevy_camera::visibility::add_visibility_class::<UiLayout>)]
 pub struct UiLayout {
     /// Stored layout per state
     pub layouts: HashMap<TypeId, UiLayoutType>
@@ -1224,7 +1224,7 @@ impl Plugin for UiLunexPlugin {
         // Configure the system set
         app.configure_sets(PostUpdate, (
             UiSystems::PreCompute.before(UiSystems::Compute),
-            UiSystems::PostCompute.after(UiSystems::Compute).before(bevy_transform::TransformSystem::TransformPropagate),
+            UiSystems::PostCompute.after(UiSystems::Compute).before(bevy_transform::TransformSystems::Propagate),
         ));
 
         // Add observers
@@ -1234,7 +1234,7 @@ impl Plugin for UiLunexPlugin {
         app.add_systems(PostUpdate, (
 
             system_state_base_balancer,
-            system_text_size_to_layout.after(bevy_text::update_text2d_layout),
+            system_text_size_to_layout.after(bevy_sprite::update_text2d_layout),
             system_image_size_to_layout,
             system_recompute_on_change::<UiLayout>,
 
@@ -1261,7 +1261,7 @@ impl Plugin for UiLunexPlugin {
 
             system_color,
             system_mark_3d,
-            system_pipe_sprite_size_from_dimension.before(bevy_sprite::SpriteSystem::ComputeSlices),
+            system_pipe_sprite_size_from_dimension.before(bevy_sprite::SpriteSystems::ComputeSlices),
             system_text_size_from_dimension,
             system_mesh_3d_reconstruct_from_dimension,
             system_mesh_2d_reconstruct_from_dimension,

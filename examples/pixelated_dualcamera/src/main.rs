@@ -1,6 +1,6 @@
 #![allow(clippy::type_complexity)]
 
-use bevy::{prelude::*, render::{camera::RenderTarget, view::RenderLayers}};
+use bevy::{camera::{visibility::RenderLayers, RenderTarget}, prelude::*};
 use bevy_lunex::prelude::*;
 
 fn main() -> AppExit {

@@ -128,22 +128,25 @@ pub fn system_state_hover_update(
 }
 
 /// Event that enables the hover transition
-#[derive(Event, Clone, Copy)]
-pub struct UiHoverSet(pub bool);
+#[derive(EntityEvent, Clone, Copy)]
+pub struct UiHoverSet{
+    entity: Entity,
+    enable_hover_transition: bool,
+}
 
 /// This observer enables the hover transition on trigger
 fn observer_state_hover_set(
-    trigger: Trigger<UiHoverSet>,
+    trigger: On<UiHoverSet>,
     mut query: Query<&mut UiHover>,
 ) {
-    if let Ok(mut hover) = query.get_mut(trigger.target()) {
-        hover.enable = trigger.0;
+    if let Ok(mut hover) = query.get_mut(trigger.event_target()) {
+        hover.enable = trigger.enable_hover_transition;
     }
 }
 
 /// Utility observer that triggers the [`UiHoverSet`] event on triggered event.
-pub fn hover_set<E: Event, const BOOL: bool>(trigger: Trigger<E>, mut commands: Commands) {
-    commands.trigger_targets(UiHoverSet(BOOL), trigger.target());
+pub fn hover_set<E: EntityEvent, const BOOL: bool>(trigger: On<E>, mut commands: Commands) {
+    commands.trigger(UiHoverSet{entity: trigger.event_target(), enable_hover_transition: BOOL});
 }
 
 
@@ -208,10 +211,15 @@ impl UiStateTrait for UiOutro {
 pub fn default_linear_curve() -> fn(f32) -> f32 { |v| {v} }
 
 /// This observer will listen for said event and duplicate it to it's children
-fn observer_event_duplicator<E: Event + Copy>(trigger: Trigger<E>, mut commands: Commands, mut query: Query<&Children>) {
-    if let Ok(children) = query.get_mut(trigger.target()) {
-        let targets: Vec<Entity> = children.iter().collect();
-        commands.trigger_targets(*trigger.event(), targets);
+fn observer_event_duplicator<'a, E: EntityEvent + Copy>(trigger: On<E>, mut commands: Commands, mut query: Query<&Children>)
+    where E::Trigger<'a>: Default
+{
+    if let Ok(children) = query.get_mut(trigger.event_target()) {
+        for target in children.iter() {
+            let mut child_event = *trigger.event();
+            *child_event.event_target_mut() = target;
+            commands.trigger(child_event);
+        }
     }
 }
 

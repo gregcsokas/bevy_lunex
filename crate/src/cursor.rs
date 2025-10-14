@@ -1,10 +1,9 @@
 use crate::*;
+use bevy_camera::{NormalizedRenderTarget, Projection, RenderTarget};
 use bevy_input::{gamepad::GamepadButtonChangedEvent, mouse::MouseButtonInput, ButtonState}; 
-use bevy_picking::{pointer::{Location, PointerAction, PointerId, PointerInput, PointerLocation}, PickSet};
-use bevy_render::camera::{NormalizedRenderTarget, RenderTarget};
+use bevy_picking::{pointer::{Location, PointerAction, PointerId, PointerInput, PointerLocation}, PickingSystems};
 use bevy_platform::collections::HashMap;
-use bevy_window::{PrimaryWindow, SystemCursorIcon, WindowRef};
-use bevy_winit::cursor::CursorIcon;
+use bevy_window::{CursorIcon, CursorOptions, PrimaryWindow, SystemCursorIcon, WindowRef};
 
 // Exported prelude
 pub mod prelude {
@@ -157,7 +156,7 @@ impl OnHoverSetCursor {
     }
 }
 
-fn observer_cursor_request_cursor_icon(mut trigger: Trigger<Pointer<Over>>, mut pointers: Query<(&PointerId, &PointerLocation, Has<GamepadCursor>)>, query: Query<&OnHoverSetCursor>, mut queue: ResMut<CursorIconQueue>) {
+fn observer_cursor_request_cursor_icon(mut trigger: On<Pointer<Over>>, mut pointers: Query<(&PointerId, &PointerLocation, Has<GamepadCursor>)>, query: Query<&OnHoverSetCursor>, mut queue: ResMut<CursorIconQueue>) {
     // Find the pointer location that triggered this observer
     let id = trigger.pointer_id;
     for (pointer, location, is_gamepad) in pointers.iter_mut().filter(|(p_id, _, _)| id == **p_id) {
@@ -167,16 +166,16 @@ fn observer_cursor_request_cursor_icon(mut trigger: Trigger<Pointer<Over>>, mut 
             if let NormalizedRenderTarget::Window(window) = location.target {
 
                 // Request a cursor change
-                if let Ok(requestee) = query.get(trigger.target) {
+                if let Ok(requestee) = query.get(trigger.event_target()) {
                     trigger.propagate(false);
-                    queue.request_cursor(*pointer, if is_gamepad { None } else { Some(window.entity()) }, trigger.target, requestee.cursor, 1);
+                    queue.request_cursor(*pointer, if is_gamepad { None } else { Some(window.entity()) }, trigger.event_target(), requestee.cursor, 1);
                 }
             }
         }
     }
 }
 
-fn observer_cursor_cancel_cursor_icon(mut trigger: Trigger<Pointer<Out>>, mut pointers: Query<(&PointerId, &PointerLocation)>, query: Query<&OnHoverSetCursor>, mut queue: ResMut<CursorIconQueue>) {
+fn observer_cursor_cancel_cursor_icon(mut trigger: On<Pointer<Out>>, mut pointers: Query<(&PointerId, &PointerLocation)>, query: Query<&OnHoverSetCursor>, mut queue: ResMut<CursorIconQueue>) {
     // Find the pointer location that triggered this observer
     let id = trigger.pointer_id;
     for (pointer, location) in pointers.iter_mut().filter(|(p_id, _)| id == **p_id) {
@@ -186,9 +185,9 @@ fn observer_cursor_cancel_cursor_icon(mut trigger: Trigger<Pointer<Out>>, mut po
             if matches!(location.target, NormalizedRenderTarget::Window(_)) {
 
                 // Cancel existing cursor icon request if applicable
-                if query.get(trigger.target).is_ok() {
+                if query.get(trigger.event_target()).is_ok() {
                     trigger.propagate(false);
-                    queue.cancel_cursor(*pointer, &trigger.target);
+                    queue.cancel_cursor(*pointer, &trigger.event_target());
                 }
             }
         }
@@ -281,14 +280,14 @@ pub struct GamepadAttachedCursor(pub Entity);
 
 /// This system will hide the native cursor.
 fn system_cursor_hide_native(
-    mut windows: Query<&mut Window>,
+    mut windows: Query<&mut CursorOptions>,
     query: Query<(&PointerLocation, Has<GamepadCursor>), With<SoftwareCursor>>
 ) {
     for (pointer_location, is_gamepad) in &query {
         if let Some(location) = &pointer_location.location {
             if let NormalizedRenderTarget::Window(window) = location.target {
-                if let Ok(mut window) = windows.get_mut(window.entity()) {
-                    window.cursor_options.visible = is_gamepad;
+                if let Ok(mut cursor_options) = windows.get_mut(window.entity()) {
+                    cursor_options.visible = is_gamepad;
                 }
             }
         }
@@ -420,7 +419,7 @@ fn system_cursor_move_pointer(
 fn system_cursor_send_move_events(
     mut cursor_last: Local<HashMap<PointerId, Vec2>>,
     pointers: Query<(&PointerId, &PointerLocation), With<SoftwareCursor>>,
-    mut pointer_output: EventWriter<PointerInput>,
+    mut pointer_output: MessageWriter<PointerInput>,
 ) {
     // Send mouse movement events
     for (pointer, location) in &pointers {
@@ -446,8 +445,8 @@ fn system_cursor_send_move_events(
 /// This system will send out mouse pick events
 fn system_cursor_mouse_send_pick_events(
     pointers: Query<&PointerLocation, (With<SoftwareCursor>, Without<GamepadCursor>)>,
-    mut mouse_inputs: EventReader<MouseButtonInput>,
-    mut pointer_output: EventWriter<PointerInput>,
+    mut mouse_inputs: MessageReader<MouseButtonInput>,
+    mut pointer_output: MessageWriter<PointerInput>,
 ) {
     // Send mouse movement events
     for location in &pointers {
@@ -499,8 +498,8 @@ fn system_cursor_mouse_send_pick_events(
 /// This system will send out gamepad pick events
 fn system_cursor_gamepad_send_pick_events(
     pointers: Query<&PointerLocation, (With<SoftwareCursor>, With<GamepadCursor>)>,
-    mut mouse_inputs: EventReader<GamepadButtonChangedEvent>,
-    mut pointer_output: EventWriter<PointerInput>,
+    mut mouse_inputs: MessageReader<GamepadButtonChangedEvent>,
+    mut pointer_output: MessageWriter<PointerInput>,
 ) {
     // Send mouse movement events
     for location in &pointers {
@@ -579,7 +578,7 @@ impl Plugin for CursorPlugin {
                 system_cursor_mouse_send_pick_events,
                 system_cursor_gamepad_send_pick_events,
                 ApplyDeferred
-            ).chain().in_set(PickSet::Input))
+            ).chain().in_set(PickingSystems::Input))
 
             // Add core systems
             .add_systems(PreUpdate, (

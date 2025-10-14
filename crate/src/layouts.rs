@@ -255,7 +255,7 @@ impl UiLayoutTypeWindow {
     pub const fn new() -> Self {
         Self {
             pos: UiValue::new(),
-            anchor: Anchor::TopLeft,
+            anchor: Anchor::TOP_LEFT,
             size: UiValue::new(),
         }
     }

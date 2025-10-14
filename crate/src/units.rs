@@ -900,17 +900,17 @@ pub trait NiceDisplay {
 
 impl NiceDisplay for Anchor {
     fn to_nicestr(&self) -> String {
-        match self {
-            Anchor::Center => "Center".green().to_string(),
-            Anchor::BottomLeft => "BottomLeft".green().to_string(),
-            Anchor::BottomCenter => "BottomCenter".green().to_string(),
-            Anchor::BottomRight => "BottomRight".green().to_string(),
-            Anchor::CenterLeft => "CenterLeft".green().to_string(),
-            Anchor::CenterRight => "CenterRight".green().to_string(),
-            Anchor::TopLeft => "TopLeft".green().to_string(),
-            Anchor::TopCenter => "TopCenter".green().to_string(),
-            Anchor::TopRight => "TopRight".green().to_string(),
-            Anchor::Custom(point) => format!("({}, {})", format!("{}", point.x).green(), format!("{}", point.y).green()),
+        match *self {
+            Anchor::CENTER => "Center".green().to_string(),
+            Anchor::BOTTOM_LEFT => "BottomLeft".green().to_string(),
+            Anchor::BOTTOM_CENTER => "BottomCenter".green().to_string(),
+            Anchor::BOTTOM_RIGHT => "BottomRight".green().to_string(),
+            Anchor::CENTER_LEFT => "CenterLeft".green().to_string(),
+            Anchor::CENTER_RIGHT => "CenterRight".green().to_string(),
+            Anchor::TOP_LEFT => "TopLeft".green().to_string(),
+            Anchor::TOP_CENTER => "TopCenter".green().to_string(),
+            Anchor::TOP_RIGHT => "TopRight".green().to_string(),
+            Anchor(point) => format!("({}, {})", format!("{}", point.x).green(), format!("{}", point.y).green()),
         }
     }
 }

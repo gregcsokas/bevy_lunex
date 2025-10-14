@@ -14,7 +14,7 @@ use crate::*;
 pub struct UiLunexPickingPlugin;
 impl Plugin for UiLunexPickingPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(PreUpdate, lunex_2d_picking.in_set(PickSet::Backend));
+        app.add_systems(PreUpdate, lunex_2d_picking.in_set(PickingSystems::Backend));
     }
 }
 
@@ -41,7 +41,7 @@ fn lunex_2d_picking(
         Option<&Pickable>,
         &ViewVisibility,
     ), Without<NoLunexPicking>>,
-    mut output: EventWriter<PointerHits>,
+    mut output: MessageWriter<PointerHits>,
 ) {
     let mut sorted_nodes: Vec<_> = lunex_query
         .iter()

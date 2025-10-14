@@ -10,8 +10,10 @@ enum DurationMode {
 
 /// This component modifies attached [`Text2d`] with a modified string outputted from a time dependant function.
 #[derive(Component, Reflect, Clone, PartialEq, Debug)]
+#[reflect(from_reflect = false)]
 pub struct TextAnimator {
     string: String,
+    #[reflect(ignore)]
     function: fn(t: f32, text: &str) -> String,
     counter: f32,
     mode: DurationMode,
