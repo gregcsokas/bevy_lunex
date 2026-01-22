@@ -216,9 +216,9 @@ fn observer_event_duplicator<'a, E: EntityEvent + Copy>(trigger: On<E>, mut comm
 {
     if let Ok(children) = query.get_mut(trigger.event_target()) {
         for target in children.iter() {
-            let mut child_event = *trigger.event();
-            *child_event.event_target_mut() = target;
-            commands.trigger(child_event);
+            let child_event = *trigger.event();
+            //*child_event.event_target() = target;
+            commands.entity(target).trigger(|_| child_event);
         }
     }
 }

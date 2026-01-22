@@ -2,15 +2,15 @@
 #=== EXAMPLE INFO ===#
 
 [package]
-  name = "color2d"
   authors.workspace = true
-  version.workspace = true
   edition.workspace = true
-  publish = false
+  name              = "color2d"
+  publish           = false
+  version.workspace = true
 
-#===============================#
-#=== DEPENDENCIES & FEATURES ===#
+  #===============================#
+  #=== DEPENDENCIES & FEATURES ===#
 
 [dependencies]
-  bevy = { version = "^0.17.0", default-features = true }
+  bevy       = { version = "0.18", default-features = true }
   bevy_lunex = { workspace = true }

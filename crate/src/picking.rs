@@ -1,3 +1,4 @@
+use bevy_camera::RenderTarget;
 use bevy_math::FloatExt;
 use bevy_window::PrimaryWindow;
 use bevy_picking::backend::prelude::*;
@@ -30,6 +31,7 @@ fn lunex_2d_picking(
     cameras: Query<(
         Entity,
         &Camera,
+        &RenderTarget,
         &GlobalTransform,
         &Projection,
     )>,
@@ -64,16 +66,15 @@ fn lunex_2d_picking(
         pointer_location.location().map(|loc| (pointer, loc))
     }) {
         let mut blocked = false;
-        let Some((cam_entity, camera, cam_transform, Projection::Orthographic(cam_ortho))) =
+        let Some((cam_entity, camera, _, cam_transform, Projection::Orthographic(cam_ortho))) =
             cameras
                 .iter()
-                .filter(|(_, camera, _, _)| {
+                .filter(|(_, camera, _, _, _)| {
                     camera.is_active
                 })
-                .find(|(_, camera, _, _)| {
+                .find(|(_, _, target, _, _)| {
                     
-                    camera
-                        .target
+                    target
                         .normalize(primary_window)
                         .is_some_and(|x| x == location.target)
                 })

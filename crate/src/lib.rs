@@ -163,10 +163,8 @@ impl ImageTextureConstructor for Image {}
 /// Provides utility costructor methods for [`Camera`]
 pub trait CameraTextureRenderConstructor {
     /// Just a utility constructor for camera that renders to a transparent texture
-    fn clear_render_to(handle: Handle<Image>) -> Camera {
-        use bevy_camera::RenderTarget;
+    fn clear_render() -> Camera {
         Camera {
-            target: RenderTarget::Image(handle.into()),
             clear_color: ClearColorConfig::Custom(Color::srgba(0.0, 0.0, 0.0, 0.0)),
             ..Default::default()
         }

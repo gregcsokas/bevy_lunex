@@ -51,8 +51,8 @@ fn spawn_cameras(
     commands.spawn((
         Camera3d::default(),
         // Configure the camera
+        RenderTarget::Image(canvas.clone().into()),
         Camera {
-            target: RenderTarget::Image(canvas.into()),
             clear_color: ClearColorConfig::Custom(Color::srgba(0.0, 0.0, 0.0, 0.5)),
             order: -1,
             ..Default::default()
