@@ -405,7 +405,7 @@ pub fn system_debug_print_data(
         }
 
         // Print to console
-        info!("UiLayout change detected:\n{}", output_string);
+        println!("UiLayout change detected:\n{}", output_string);
     }
 }
 

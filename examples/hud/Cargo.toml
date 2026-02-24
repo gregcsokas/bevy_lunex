@@ -1,0 +1,16 @@
+#====================#
+#=== EXAMPLE INFO ===#
+
+[package]
+  authors.workspace = true
+  edition.workspace = true
+  name              = "hud"
+  publish           = false
+  version.workspace = true
+
+  #===============================#
+  #=== DEPENDENCIES & FEATURES ===#
+
+[dependencies]
+  bevy       = { version = "0.18", default-features = true }
+  bevy_lunex = { workspace = true }
