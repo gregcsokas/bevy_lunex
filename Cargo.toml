@@ -46,36 +46,37 @@
   #=== GAME ENGINE SOURCE === #
 
   ## GAME ENGINE
-  bevy_app           = { version = "0.18", default-features = false }
-  bevy_asset         = { version = "0.18", default-features = false }
-  bevy_camera        = { version = "0.18", default-features = false }
-  bevy_color         = { version = "0.18", default-features = false }
-  bevy_derive        = { version = "0.18", default-features = false }
-  bevy_ecs           = { version = "0.18", default-features = false }
-  bevy_gizmos        = { version = "0.18", default-features = false }
-  bevy_image         = { version = "0.18", default-features = false }
-  bevy_input         = { version = "0.18", default-features = false }
-  bevy_log           = { version = "0.18", default-features = false }
-  bevy_math          = { version = "0.18", default-features = false }
-  bevy_mesh          = { version = "0.18", default-features = false }
-  bevy_pbr           = { version = "0.18", default-features = false }
-  bevy_picking       = { version = "0.18", default-features = false }
-  bevy_platform      = { version = "0.18", default-features = false }
-  bevy_reflect       = { version = "0.18", default-features = false, features = ["functions"] }
-  bevy_render        = { version = "0.18", default-features = false }
-  bevy_sprite        = { version = "0.18", default-features = false, features = ["bevy_text"] }
-  bevy_sprite_render = { version = "0.18", default-features = false }
-  bevy_text          = { version = "0.18", default-features = false }
-  bevy_time          = { version = "0.18", default-features = false }
-  bevy_transform     = { version = "0.18", default-features = false }
-  bevy_window        = { version = "0.18", default-features = false }
-  bevy_winit         = { version = "0.18", default-features = false, features = ["custom_cursor"] }
-  cosmic-text        = { version = "0.16", features = ["shape-run-cache"] }
+  bevy_app           = { version = "0.19", default-features = false }
+  bevy_asset         = { version = "0.19", default-features = false }
+  bevy_camera        = { version = "0.19", default-features = false }
+  bevy_color         = { version = "0.19", default-features = false }
+  bevy_derive        = { version = "0.19", default-features = false }
+  bevy_ecs           = { version = "0.19", default-features = false }
+  bevy_gizmos        = { version = "0.19", default-features = false }
+  bevy_image         = { version = "0.19", default-features = false }
+  bevy_input         = { version = "0.19", default-features = false }
+  bevy_log           = { version = "0.19", default-features = false }
+  bevy_math          = { version = "0.19", default-features = false }
+  bevy_mesh          = { version = "0.19", default-features = false }
+  bevy_pbr           = { version = "0.19", default-features = false }
+  bevy_picking       = { version = "0.19", default-features = false }
+  bevy_platform      = { version = "0.19", default-features = false }
+  bevy_reflect       = { version = "0.19", default-features = false, features = ["functions"] }
+  bevy_render        = { version = "0.19", default-features = false }
+  bevy_sprite        = { version = "0.19", default-features = false, features = ["bevy_text"] }
+  bevy_sprite_render = { version = "0.19", default-features = false }
+  bevy_text          = { version = "0.19", default-features = false }
+  bevy_time          = { version = "0.19", default-features = false }
+  bevy_transform     = { version = "0.19", default-features = false }
+  bevy_window        = { version = "0.19", default-features = false }
+  bevy_winit         = { version = "0.19", default-features = false, features = ["custom_cursor"] }
 
   #===============================#
   #=== GAME ENGINE EXTENSIONS === #
 
-  bevy_rich_text3d = { version = "^0.6" }
+  # Bevy 0.19 port from mintlu8/bevy_rich_text3d#23. Pin the exact
+  # reviewed commit so builds do not drift as the contributor branch moves.
+  bevy_rich_text3d = { git = "https://github.com/mintlu8/bevy_rich_text3d", rev = "1ee4f06046a1cad2e5fca9af2fc826c68ef1aec0" }
 
   #===========================#
   #=== RUST MISCELLANEOUS === #
