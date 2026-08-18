@@ -616,15 +616,24 @@ pub fn system_layout_compute(
                     }
                 }
 
-                // Save the computed layout
-                node_transform.translation.x = node_rectangle.pos.x;
-                node_transform.translation.y = -node_rectangle.pos.y;
+                // Save the computed layout without marking unchanged outputs as changed.
+                // Downstream systems use Bevy change detection to rebuild render assets,
+                // so touching identical values can cause unnecessary per-frame churn.
                 let depth = match node_depth {
                     UiDepth::Add(v) => {depth + v},
                     UiDepth::Set(v) => {*v},
                 };
-                node_transform.translation.z = depth * root.abs_scale;
-                **node_dimension = node_rectangle.size;
+                let translation = Vec3::new(
+                    node_rectangle.pos.x,
+                    -node_rectangle.pos.y,
+                    depth * root.abs_scale,
+                );
+                if node_transform.translation != translation {
+                    node_transform.translation = translation;
+                }
+                if **node_dimension != node_rectangle.size {
+                    **node_dimension = node_rectangle.size;
+                }
 
                 if let Some(node_children) = node_children_option {
                     // Add children to the stack
