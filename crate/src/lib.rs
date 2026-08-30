@@ -130,7 +130,7 @@ pub fn system_embedd_resize(
     mut images: ResMut<Assets<Image>>,
 ) {
     for (sprite, dimension) in &query {
-        if let Some(image) = images.get_mut(&sprite.image) && **dimension != Vec2::ZERO {
+        if let Some(mut image) = images.get_mut(&sprite.image) && **dimension != Vec2::ZERO {
             image.resize(bevy_render::render_resource::Extent3d { width: dimension.x as u32, height: dimension.y as u32, ..Default::default() });
         }
     }
@@ -616,15 +616,24 @@ pub fn system_layout_compute(
                     }
                 }
 
-                // Save the computed layout
-                node_transform.translation.x = node_rectangle.pos.x;
-                node_transform.translation.y = -node_rectangle.pos.y;
+                // Save the computed layout without marking unchanged outputs as changed.
+                // Downstream systems use Bevy change detection to rebuild render assets,
+                // so touching identical values can cause unnecessary per-frame churn.
                 let depth = match node_depth {
                     UiDepth::Add(v) => {depth + v},
                     UiDepth::Set(v) => {*v},
                 };
-                node_transform.translation.z = depth * root.abs_scale;
-                **node_dimension = node_rectangle.size;
+                let translation = Vec3::new(
+                    node_rectangle.pos.x,
+                    -node_rectangle.pos.y,
+                    depth * root.abs_scale,
+                );
+                if node_transform.translation != translation {
+                    node_transform.translation = translation;
+                }
+                if **node_dimension != node_rectangle.size {
+                    **node_dimension = node_rectangle.size;
+                }
 
                 if let Some(node_children) = node_children_option {
                     // Add children to the stack
@@ -826,15 +835,15 @@ pub fn system_image_size_to_layout(
 /// # )).with_children(|ui| {
 ///       ui.spawn((
 ///           // Position the text using the window layout's position and anchor
-///           UiLayout::window().pos((Rh(40.0), Rl(50.0))).anchor(Anchor::CenterLeft).pack(),
+///           UiLayout::window().pos((Rh(40.0), Rl(50.0))).anchor(Anchor::CENTER_LEFT).pack(),
 ///           // This controls the height of the text, so 60% of the parent's node height
 ///           UiTextSize::from(Rh(60.0)),
 ///           // You can attach text like this
 ///           Text2d::new("Button"),
 ///           // Font size now works as "text resolution"
 ///           TextFont {
-///               font: asset_server.load("fonts/Rajdhani.ttf"),
-///               font_size: 64.0,
+///               font: asset_server.load("fonts/Rajdhani.ttf").into(),
+///               font_size: FontSize::Px(64.0),
 ///               ..Default::default()
 ///           },
 ///       ));
@@ -1162,10 +1171,10 @@ pub fn system_color(
             **text = blend_color.into();
         }
         if let Some(id) = mat2d {
-            if let Some(mat) = materials2d.get_mut(id) {
+            if let Some(mut mat) = materials2d.get_mut(id) {
                 mat.color = blend_color.into();
             }
-        } else if let Some(id) = mat3d && let Some(materials3d) = &mut materials3d && let Some(mat) = materials3d.get_mut(id) {
+        } else if let Some(id) = mat3d && let Some(materials3d) = &mut materials3d && let Some(mut mat) = materials3d.get_mut(id) {
             mat.base_color = blend_color.into();
         }
     }

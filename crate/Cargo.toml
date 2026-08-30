@@ -42,7 +42,6 @@
   bevy_transform     = { workspace = true }
   bevy_window        = { workspace = true }
   bevy_winit         = { workspace = true }
-  cosmic-text        = { workspace = true }
 
   # GAME ENGINE EXTENSIONS
   bevy_rich_text3d = { workspace = true, optional = true }
