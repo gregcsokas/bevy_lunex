@@ -5,7 +5,7 @@ use crate::*;
 #[derive(Component, Reflect, Clone, PartialEq, Debug)]
 enum DurationMode {
     CharSpeed(f32),
-    AnimDuration(f32,)
+    AnimDuration(f32)
 }
 
 /// This component modifies attached [`Text2d`] with a modified string outputted from a time dependant function.
@@ -69,7 +69,7 @@ impl TextAnimator {
         self
     }
     /// This system takes care of updating the TextAnimator in time.
-    pub(crate) fn system_2d(mut query: Query<(&mut Text2d, &mut TextAnimator)>, time: Res<Time>, mut commads: Commands) {
+    pub(crate) fn system_2d(mut query: Query<(&mut Text2d, &mut TextAnimator)>, time: Res<Time>, mut commands: Commands) {
         for (mut text, mut animator) in &mut query {
             match animator.mode {
                 DurationMode::CharSpeed(speed) => {
@@ -89,7 +89,7 @@ impl TextAnimator {
                         
                         // Change the target string
                         text.0 = new_text;
-                        commads.trigger(RecomputeUiLayout);
+                        commands.trigger(RecomputeUiLayout);
                     }
                     
                 }
@@ -108,7 +108,7 @@ impl TextAnimator {
                         
                         // Change the target string
                         text.0 = new_text;
-                        commads.trigger(RecomputeUiLayout);
+                        commands.trigger(RecomputeUiLayout);
                     }
                 },
             }
@@ -116,7 +116,7 @@ impl TextAnimator {
     }
     /// This system takes care of updating the TextAnimator in time.
     #[cfg(feature = "text3d")]
-    pub(crate) fn system_3d(mut query: Query<(&mut Text3d, &mut TextAnimator)>, time: Res<Time>, mut commads: Commands) {
+    pub(crate) fn system_3d(mut query: Query<(&mut Text3d, &mut TextAnimator)>, time: Res<Time>, mut commands: Commands) {
         for (mut text, mut animator) in &mut query {
             match animator.mode {
                 DurationMode::CharSpeed(speed) => {
@@ -137,7 +137,7 @@ impl TextAnimator {
                         // Change the target string
                         let text = text.get_single_mut().expect("Multisegment 3D text not supported, make a PR to Lunex if you need it");
                         *text = new_text;
-                        commads.trigger(RecomputeUiLayout);
+                        commands.trigger(RecomputeUiLayout);
                     }
                     
                 }
@@ -157,7 +157,7 @@ impl TextAnimator {
                         // Change the target string
                         let text = text.get_single_mut().expect("Multisegment 3D text not supported, make a PR to Lunex if you need it");
                         *text = new_text;
-                        commads.trigger(RecomputeUiLayout);
+                        commands.trigger(RecomputeUiLayout);
                     }
                 },
             }
@@ -167,12 +167,14 @@ impl TextAnimator {
 
 /// Simulates typing animation with an underscore cursor
 pub fn typing_animation_underscore(t: f32, text: &str) -> String {
-    let visible_chars = (t * text.len() as f32).floor() as usize;
-    let visible_chars = visible_chars.min(text.len());
+    let chars: Vec<char> = text.chars().collect();
+    let visible_chars = (t * chars.len() as f32).floor() as usize;
+    let visible_chars = visible_chars.min(chars.len());
 
-    if visible_chars < text.len() {
+    if visible_chars < chars.len() {
         // Show typed characters plus cursor
-        format!("{}{}", &text[..visible_chars], "_")
+        let typed: String = chars[..visible_chars].iter().collect();
+        format!("{typed}_")
     } else {
         // All characters visible, show cursor at end
         text.to_string()
@@ -181,12 +183,14 @@ pub fn typing_animation_underscore(t: f32, text: &str) -> String {
 
 /// Simulates typing animation with an vertical line cursor
 pub fn typing_animation_cursor(t: f32, text: &str) -> String {
-    let visible_chars = (t * text.len() as f32).floor() as usize;
-    let visible_chars = visible_chars.min(text.len());
+    let chars: Vec<char> = text.chars().collect();
+    let visible_chars = (t * chars.len() as f32).floor() as usize;
+    let visible_chars = visible_chars.min(chars.len());
 
-    if visible_chars < text.len() {
+    if visible_chars < chars.len() {
         // Show typed characters plus cursor
-        format!("{}{}", &text[..visible_chars], "|")
+        let typed: String = chars[..visible_chars].iter().collect();
+        format!("{typed}|")
     } else {
         // All characters visible, show cursor at end
         text.to_string()
@@ -206,10 +210,11 @@ pub fn decryption_animation(t: f32, text: &str) -> String {
 
     // Define symbols used
     let symbols = "!@#$%^&*()_+-=[]{}|;:'\",.<>/?`~";
+    let chars: Vec<char> = text.chars().collect();
     let mut result = String::with_capacity(text.len());
 
-    for (i, c) in text.chars().enumerate() {
-        let char_progress = (t * text.len() as f32) - i as f32;
+    for (i, c) in chars.iter().copied().enumerate() {
+        let char_progress = (t * chars.len() as f32) - i as f32;
 
         if char_progress < 0.0 {
             // Not yet started decrypting this character
@@ -233,13 +238,16 @@ pub fn decryption_animation(t: f32, text: &str) -> String {
 
 /// Creates a slide-in effect where characters come in from the sides
 pub fn slide_in_animation(t: f32, text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let center = chars.len() / 2;
+    // Guard against division by zero for texts shorter than 2 characters
+    let center_scale = center.max(1) as f32;
     let mut result = String::with_capacity(text.len());
-    let center = text.len() / 2;
 
-    for (i, c) in text.chars().enumerate() {
+    for (i, c) in chars.iter().copied().enumerate() {
         let distance_from_center = center.abs_diff(i);
 
-        let char_progress = t * 2.0 - (distance_from_center as f32 / center as f32);
+        let char_progress = t * 2.0 - (distance_from_center as f32 / center_scale);
 
         if char_progress >= 1.0 {
             // Character is fully visible
@@ -258,8 +266,10 @@ pub fn slide_in_animation(t: f32, text: &str) -> String {
 
 /// Reveals characters in a scrambled order
 pub fn scrambled_reveal_animation(t: f32, text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+
     // Create a seeded RNG for consistent scrambling
-    let mut indices: Vec<usize> = (0..text.len()).collect();
+    let mut indices: Vec<usize> = (0..chars.len()).collect();
     let seed = 42; // Fixed seed for consistent scrambling
     let mut rng = StdRng::seed_from_u64(seed);
 
@@ -267,12 +277,12 @@ pub fn scrambled_reveal_animation(t: f32, text: &str) -> String {
     use rand::seq::SliceRandom;
     indices.shuffle(&mut rng);
 
-    let chars_to_reveal = (t * text.len() as f32).floor() as usize;
-    let mut result = vec![' '; text.len()];
+    let chars_to_reveal = (t * chars.len() as f32).floor() as usize;
+    let mut result = vec![' '; chars.len()];
 
     // Reveal characters in scrambled order
-    for i in indices.iter().take(chars_to_reveal.min(text.len())) {
-        result[*i] = text.chars().nth(*i).unwrap();
+    for i in indices.iter().take(chars_to_reveal.min(chars.len())) {
+        result[*i] = chars[*i];
     }
 
     result.into_iter().collect()

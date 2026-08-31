@@ -360,8 +360,8 @@ pub fn system_debug_print_data(
                     format!("{:.00}", node_transform.translation.z).green(),
                 );
 
-                match node_layout.layouts.get(&UiBase::id()).unwrap() {
-                    UiLayoutType::Boundary(boundary) => {
+                match node_layout.layouts.get(&UiBase::id()) {
+                    Some(UiLayoutType::Boundary(boundary)) => {
                         output_string += &format!(" ➜ {} {} p1: {}, p2: {} {}",
                             "Boundary".bold(),
                             "{",
@@ -370,7 +370,7 @@ pub fn system_debug_print_data(
                             "}",
                         );
                     },
-                    UiLayoutType::Window(window) => {
+                    Some(UiLayoutType::Window(window)) => {
                         output_string += &format!(" ➜ {} {} p: {}, s: {}, a: {} {}",
                             "Window".bold(),
                             "{",
@@ -380,7 +380,7 @@ pub fn system_debug_print_data(
                             "}",
                         );
                     },
-                    UiLayoutType::Solid(solid) => {
+                    Some(UiLayoutType::Solid(solid)) => {
                         output_string += &format!(" ➜ {} {} s: {}, ax: {}, ay: {}, scl: {} {}",
                             "Solid".bold(),
                             "{",
@@ -391,6 +391,7 @@ pub fn system_debug_print_data(
                             "}",
                         );
                     },
+                    None => {},
                 }
 
                 output_string += "\n";
@@ -602,9 +603,10 @@ pub fn system_layout_compute(
                 let mut node_rectangle = Rectangle2D::EMPTY;
 
                 // Use base if no active state
-                if total_weight == 0.0 {
-                    node_rectangle.pos += computed_rectangles[0].1.pos;
-                    node_rectangle.size += computed_rectangles[0].1.size;
+                if total_weight == 0.0
+                    && let Some((_, base_rectangle)) = computed_rectangles.iter().find(|(state, _)| **state == UiBase::id()) {
+                    node_rectangle.pos += base_rectangle.pos;
+                    node_rectangle.size += base_rectangle.size;
 
                 // Combine the active states into one rectangle
                 } else {
@@ -681,7 +683,7 @@ pub fn system_layout_compute(
 ///           // You can define colors per state
 ///           UiColor::new(vec![
 ///               (UiBase::id(), Color::Srgba(RED).with_alpha(0.8)),
-///               (UiHover::id(), Color::Srgba(YELLOW).with_alpha(1.2))
+///               (UiHover::id(), Color::Srgba(YELLOW).with_alpha(1.0))
 ///           ]),
 ///           // ... Sprite, Text, etc.
 ///
@@ -727,7 +729,7 @@ pub fn system_state_base_balancer(
 }
 /// This system pipes the attached state component data to the [`UiState`] component.
 pub fn system_state_pipe_into_manager<S: UiStateTrait + Component>(
-    mut commads: Commands,
+    mut commands: Commands,
     mut query: Query<(&mut UiState, &S), Changed<S>>,
 ) {
     for (mut manager, state) in &mut query {
@@ -740,7 +742,7 @@ pub fn system_state_pipe_into_manager<S: UiStateTrait + Component>(
             manager.states.insert(S::id(), state.value());
         }
         // Recompute layout
-        commads.trigger(RecomputeUiLayout);
+        commands.trigger(RecomputeUiLayout);
     }
 }
 
@@ -798,16 +800,16 @@ pub fn system_image_size_to_layout(
             let x = image_size.get_x() * image.width() as f32;
             let y = image_size.get_y() * image.height() as f32;
 
-            if match layout.layouts.get(&UiBase::id()).unwrap() {
-                UiLayoutType::Window(window) => window.size.get_x() != x || window.size.get_y() != y,
-                UiLayoutType::Solid(solid) => solid.size.get_x() != x || solid.size.get_y() != y,
-                _ => false,
-            } {
-                match layout.layouts.get_mut(&UiBase::id()).unwrap() {
-                    UiLayoutType::Window(window) => { window.set_width(x); window.set_height(y); },
-                    UiLayoutType::Solid(solid) => { solid.set_width(x); solid.set_height(y); },
-                    _ => {},
-                }
+            match layout.layouts.get_mut(&UiBase::id()) {
+                Some(UiLayoutType::Window(window)) if window.size.get_x() != x || window.size.get_y() != y => {
+                    window.set_width(x);
+                    window.set_height(y);
+                },
+                Some(UiLayoutType::Solid(solid)) if solid.size.get_x() != x || solid.size.get_y() != y => {
+                    solid.set_width(x);
+                    solid.set_height(y);
+                },
+                _ => {},
             }
         }
     }
@@ -868,6 +870,7 @@ pub fn system_text_size_from_dimension(
         // Wait for text to render
         if text_info.size.y == 0.0 {
             commands.trigger(RecomputeUiLayout);
+            continue;
         }
 
         // Scale the text
@@ -889,13 +892,13 @@ pub fn system_text_size_to_layout(
         }
 
         // Create the text layout
-        match layout.layouts.get_mut(&UiBase::id()).expect("UiBase state not found for Text") {
-            UiLayoutType::Window(window) => {
+        match layout.layouts.get_mut(&UiBase::id()) {
+            Some(UiLayoutType::Window(window)) => {
                 let lines = 1 + text.trim().matches('\n').count();
                 window.set_height(**text_size * (lines as f32));
                 window.set_width(**text_size * (lines as f32) * (text_info.size.x / text_info.size.y));
             },
-            UiLayoutType::Solid(solid) => {
+            Some(UiLayoutType::Solid(solid)) => {
                 solid.set_size(Ab(text_info.size));
             },
             _ => {},
@@ -919,15 +922,15 @@ pub fn system_text_3d_size_to_layout(
         }
 
         // Create the text layout
-        match layout.layouts.get_mut(&UiBase::id()).expect("UiBase state not found for Text") {
-            UiLayoutType::Window(window) => {
+        match layout.layouts.get_mut(&UiBase::id()) {
+            Some(UiLayoutType::Window(window)) => {
                 let lines = 1 + text.get_single()
                     .expect("Multisegment 3D text not supported, make a PR to Lunex if you need it")
                     .trim().matches('\n').count();
                 window.set_height(**text_size * (lines as f32));
                 window.set_width(**text_size * (lines as f32) * (text_info.dimension.x / text_info.dimension.y));
             },
-            UiLayoutType::Solid(solid) => {
+            Some(UiLayoutType::Solid(solid)) => {
                 solid.set_size(Ab(text_info.dimension));
             },
             _ => {},
@@ -1077,7 +1080,7 @@ pub fn system_touch_camera_if_fetch_added<const INDEX: usize>(
 ///           // ... Layout, etc.
 ///           UiColor::new(vec![
 ///               (UiBase::id(), Color::Srgba(RED).with_alpha(0.8)),
-///               (UiHover::id(), Color::Srgba(YELLOW).with_alpha(1.2))
+///               (UiHover::id(), Color::Srgba(YELLOW).with_alpha(1.0))
 ///           ]),
 ///           // ... Sprite, Text, etc.
 ///       ));
@@ -1171,8 +1174,11 @@ pub fn system_color(
             **text = blend_color.into();
         }
         if let Some(id) = mat2d {
-            if let Some(mut mat) = materials2d.get_mut(id) {
-                mat.color = blend_color.into();
+            let material_color: Color = blend_color.into();
+            if materials2d.get(id).is_some_and(|mat| mat.color != material_color)
+                && let Some(mut mat) = materials2d.get_mut(id)
+            {
+                mat.color = material_color;
             }
         } else if let Some(id) = mat3d && let Some(materials3d) = &mut materials3d {
             let blend_color = blend_color.into();

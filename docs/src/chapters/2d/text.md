@@ -18,8 +18,8 @@ ui.spawn((
     Text2d::new("Button"),
     // Font size now works as "text resolution"
     TextFont {
-        font: asset_server.load("fonts/Rajdhani.ttf"),
-        font_size: 64.0,
+        font: asset_server.load("fonts/Rajdhani.ttf").into(),
+        font_size: FontSize::Px(64.0),
         ..Default::default()
     },
 ));
@@ -31,6 +31,6 @@ ui.spawn((
 ### How does it work?
 
 When you spawn a `Text2d`, Lunex will wait until Bevy computes the text bounds (glyph size, font size, etc.).
-After Bevy is done with the text, Lunex will take these values and put them inside `UiLayout::boundary::size` property
+After Bevy is done with the text, Lunex will take these values and put them inside the `UiLayout`'s `Window` (or `Solid`) size property
 scaled together with `UiTextSize`. After the Ui layout is computed for the given frame, it will scale the `Transform`
 so that the text fits into the node bounds.

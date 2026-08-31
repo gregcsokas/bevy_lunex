@@ -83,11 +83,10 @@ fn system_cursor_icon_queue_apply(
             if let Some(mut window_cursor) = window_cursor_option {
                 #[allow(clippy::single_match)]
                 match window_cursor.as_mut() {
-                    CursorIcon::System(previous) => {
-                        if *previous != data.top_request {
+                    CursorIcon::System(previous)
+                        if *previous != data.top_request => {
                             *previous = data.top_request;
-                        }
-                    },
+                        },
                     _ => {},
                 }
 
@@ -113,15 +112,15 @@ fn system_cursor_icon_queue_purge(
         }
 
         // Remove despawned entities
-        let mut to_remove = Vec::new();
+        let mut entities_to_remove = Vec::new();
         for (entity, _) in &data.queue {
             if entities.get(*entity).is_err() {
-                to_remove.push(*entity);
+                entities_to_remove.push(*entity);
             }
         }
 
         // Cleanup
-        for entity in to_remove {
+        for entity in entities_to_remove {
             data.queue.remove(&entity);
         }
     }
@@ -370,7 +369,7 @@ fn system_cursor_mouse_move(
 
 
 /// This system will update the transform component to reflect the sprite offset.
-fn system_cursor_update_tranform(
+fn system_cursor_update_transform(
     mut query: Query<(&SoftwareCursor, &mut Transform)>
 ) {
     for (cursor, mut transform) in &mut query {
@@ -383,16 +382,22 @@ fn system_cursor_update_tranform(
 /// This system will move the virtual pointer location.
 fn system_cursor_move_pointer(
     windows: Query<(Entity, &Window), With<PrimaryWindow>>,
-    mut query: Query<(&mut PointerLocation, &SoftwareCursor)>,
+    cameras: Query<&Projection>,
+    mut query: Query<(&mut PointerLocation, &SoftwareCursor, Option<&ChildOf>)>,
 ) {
     if let Ok((win_entity, window)) = windows.single() {
-        for (mut pointer, cursor) in query.iter_mut() {
+        for (mut pointer, cursor, parent_option) in query.iter_mut() {
+            // Get projection scale to account for zoomed cameras
+            let scale = if let Some(parent) = parent_option {
+                if let Ok(Projection::Orthographic(projection)) = cameras.get(parent.parent()) { projection.scale } else { 1.0 }
+            } else { 1.0 };
+
             // Change the pointer location
             pointer.location = Some(Location {
                 target: RenderTarget::Window(WindowRef::Primary).normalize(Some(win_entity)).unwrap(),
                 position: Vec2 {
-                    x: cursor.location.x + window.width()/2.0,
-                    y: -cursor.location.y + window.height()/2.0,
+                    x: cursor.location.x / scale + window.width()/2.0,
+                    y: -cursor.location.y / scale + window.height()/2.0,
                 }.round(),
             });
         }
@@ -483,12 +488,12 @@ fn system_cursor_mouse_send_pick_events(
 
 /// This system will send out gamepad pick events
 fn system_cursor_gamepad_send_pick_events(
-    pointers: Query<&PointerLocation, (With<SoftwareCursor>, With<GamepadCursor>)>,
+    pointers: Query<(&PointerId, &PointerLocation), (With<SoftwareCursor>, With<GamepadCursor>)>,
     mut mouse_inputs: MessageReader<GamepadButtonChangedEvent>,
     mut pointer_output: MessageWriter<PointerInput>,
 ) {
     // Send mouse movement events
-    for location in &pointers {
+    for (pointer_id, location) in &pointers {
         if let Some(location) = &location.location {
 
             // Send mouse click events
@@ -500,7 +505,7 @@ fn system_cursor_gamepad_send_pick_events(
                     ButtonState::Pressed => {
                         // Send out the event
                         pointer_output.write(PointerInput::new(
-                            PointerId::Mouse,
+                            *pointer_id,
                             Location {
                                 target: location.target.clone(),
                                 position: location.position,
@@ -516,7 +521,7 @@ fn system_cursor_gamepad_send_pick_events(
                     ButtonState::Released => {
                         // Send out the event
                         pointer_output.write(PointerInput::new(
-                            PointerId::Mouse,
+                            *pointer_id,
                             Location {
                                 target: location.target.clone(),
                                 position: location.position,
@@ -549,7 +554,7 @@ impl Plugin for CursorPlugin {
             .add_systems(PostUpdate, (
                 system_cursor_icon_queue_purge,
                 system_cursor_icon_queue_apply,
-            ))
+            ).chain())
 
             // OnHoverSetCursor observers
             .add_observer(observer_cursor_request_cursor_icon)
@@ -570,7 +575,7 @@ impl Plugin for CursorPlugin {
             .add_systems(PreUpdate, (
                 system_cursor_gamepad_move,
                 system_cursor_mouse_move,
-                system_cursor_update_tranform,
+                system_cursor_update_transform,
                 system_cursor_move_pointer,
             ).chain())
 

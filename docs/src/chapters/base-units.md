@@ -1,6 +1,6 @@
 # Base Units
 
-Lunex features 9 different UI units, which are used as arguments for `UiValue<T>`. The `T` is expected to be `f32`, `Vec2`, `Vec3` or `Vec4`. They are used in layout functions where `impl Into<UiValue<T>>` is specified as argument.
+Lunex features 8 different UI units, which are used as arguments for `UiValue<T>`. The `T` is expected to be `f32`, `Vec2`, `Vec3` or `Vec4`. They are used in layout functions where `impl Into<UiValue<T>>` is specified as argument.
 
 * `Ab` - Stands for absolute, usually `Ab(1)` = **1px**
 * `Rl` - Stands for relative, it means `Rl(1.0)` == **1%**

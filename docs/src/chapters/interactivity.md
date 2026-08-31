@@ -4,7 +4,7 @@ Interactivity is done through observers. Let's recap on what observers are:
 
 _Observers are a type of a one-shot system, that is run when specific event is triggered on specific entity._
 
-We define these observers, which take `Trigger<E: Event>` that specify for which event it listens. Then we attach it
+We define these observers, which take `On<E: Event>` that specify for which event it listens. Then we attach it
 to a spawned entity (_local observer_).
 
 We can listen to ANY event we want, even our own custom events. But in practise, the `Pointer<T>` events are the most common.
@@ -13,8 +13,11 @@ These events are related to `bevy_picking`, which are fired when for example a m
 - `Pointer<Click>`
 - `Pointer<Over>`
 - `Pointer<Out>`
+- `Pointer<Down>`
+- `Pointer<Up>`
+- `Pointer<Drag>`
 
-These events also have metadata that you can access through the `Trigger` component, like for example which mouse button was pressed.
+These events also have metadata that you can access through the `On` event, like for example which mouse button was pressed.
 
 ### Example
 
@@ -29,10 +32,10 @@ ui.spawn((
     Sprite::from_image(asset_server.load("images/button.png")),
 
 // Interactivity is done through observers, you can query anything here
-)).observe(|_: Trigger<Pointer<Click>>, mut exit: EventWriter<AppExit>| {
+)).observe(|_: On<Pointer<Click>>, mut exit: MessageWriter<AppExit>| {
     
     // Close the app on click
-    exit.send(AppExit::Success);
+    exit.write(AppExit::Success);
 });
 ```
 
