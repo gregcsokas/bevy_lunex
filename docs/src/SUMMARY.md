@@ -15,6 +15,7 @@
 # Chapters
 
 - [Base Units](chapters/base-units.md)
+- [Flow Layout](chapters/flow.md)
 - [Interactivity](chapters/interactivity.md)
 - [State Machine](chapters/state-machine.md)
 - [Cursor Icons](chapters/cursor-icons.md)

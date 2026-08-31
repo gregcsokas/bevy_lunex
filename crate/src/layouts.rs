@@ -6,6 +6,11 @@ pub mod prelude {
     pub use super::{
         Align,
         Scaling,
+        UiFlowDirection,
+        UiFlowSize,
+        UiFlowAxis,
+        UiFlowPadding,
+        UiLayoutTypeFlow,
     };
 }
 
@@ -113,15 +118,333 @@ pub enum Scaling {
 }
 
 
+// #=================#
+// #=== FLOW TYPES ===#
+
+/// **Ui Flow Direction** - A type used to define the direction in which child nodes
+/// of a [`UiLayoutTypeFlow`] container are laid out.
+/// ## 🛠️ Example
+/// ```
+/// # use bevy_lunex::*;
+/// let direction: UiFlowDirection = UiFlowDirection::TopToBottom; // -> stack children vertically
+/// ```
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Reflect)]
+pub enum UiFlowDirection {
+    /// Children are laid out from left to right with increasing x.
+    #[default]
+    LeftToRight,
+    /// Children are laid out from top to bottom with increasing y.
+    TopToBottom,
+}
+
+/// **Ui Flow Size** - A type used to define how a flow node takes up space inside its parent's flow.
+/// ## 🛠️ Example
+/// ```
+/// # use bevy_lunex::*;
+/// let size: UiFlowSize = UiFlowSize::Fit;                          // -> hug the content
+/// let size: UiFlowSize = UiFlowSize::Grow;                        // -> fill available space
+/// let size: UiFlowSize = UiFlowSize::Fixed(Ab(50.0).into());      // -> exactly 50px
+/// let size: UiFlowSize = UiFlowSize::Fixed(Rl(50.0).into());      // -> 50% of the parent's inner size
+/// ```
+///
+/// Sizing with relative units ( [`Rl`], [`Rw`], [`Rh`] ) behaves like a percent of the parent's
+/// inner content box and is resolved once the parent's size is known. Such nodes do not
+/// contribute to the parent's content-hugging size.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Reflect)]
+pub enum UiFlowSize {
+    /// The node wraps tightly to the size of its contents.
+    #[default]
+    Fit,
+    /// The node expands along this axis to fill available space in the parent, sharing it with other `Grow` nodes.
+    Grow,
+    /// The node is sized by an explicit [`UiValue`].
+    Fixed(UiValue<f32>),
+}
+/// Conversions
+impl From<UiValue<f32>> for UiFlowSize {
+    fn from(value: UiValue<f32>) -> Self {
+        UiFlowSize::Fixed(value)
+    }
+}
+impl From<f32> for UiFlowSize {
+    fn from(value: f32) -> Self {
+        UiFlowSize::Fixed(Ab(value).into())
+    }
+}
+/// Implement conversion of each unit into a fixed flow size
+macro_rules! impl_flow_size_from_unit {
+    ($($unit:ident), *) => {
+        $(
+            impl From<$unit<f32>> for UiFlowSize {
+                fn from(value: $unit<f32>) -> Self {
+                    UiFlowSize::Fixed(value.into())
+                }
+            }
+        )*
+    };
+}
+impl_flow_size_from_unit!(Ab, Rl, Rw, Rh, Em, Vp, Vw, Vh);
+
+/// **Ui Flow Axis** - A type used to define the sizing of one axis of a [`UiLayoutTypeFlow`] node.
+/// ## 🛠️ Example
+/// ```
+/// # use bevy_lunex::*;
+/// let axis: UiFlowAxis = UiFlowAxis::new(UiFlowSize::Grow).max(Rl(80.0).into());
+/// ```
+#[derive(Debug, Default, Clone, Copy, PartialEq, Reflect)]
+pub struct UiFlowAxis {
+    /// How the node takes up space along this axis.
+    pub size: UiFlowSize,
+    /// The smallest size the node is allowed to shrink to, overriding [`UiFlowSize::Fit`] and [`UiFlowSize::Grow`].
+    pub min: Option<UiValue<f32>>,
+    /// The largest size the node is allowed to grow to, overriding [`UiFlowSize::Fit`] and [`UiFlowSize::Grow`].
+    pub max: Option<UiValue<f32>>,
+}
+/// Constructors
+impl UiFlowAxis {
+    /// Creates a new axis with the given sizing.
+    pub const fn new(size: UiFlowSize) -> Self {
+        Self { size, min: None, max: None }
+    }
+    /// Replaces the minimum clamp with a new value.
+    pub const fn min(mut self, min: UiValue<f32>) -> Self {
+        self.min = Some(min);
+        self
+    }
+    /// Replaces the maximum clamp with a new value.
+    pub const fn max(mut self, max: UiValue<f32>) -> Self {
+        self.max = Some(max);
+        self
+    }
+}
+/// Conversions
+impl From<UiFlowSize> for UiFlowAxis {
+    fn from(value: UiFlowSize) -> Self {
+        UiFlowAxis::new(value)
+    }
+}
+
+/// **Ui Flow Padding** - A type used to define the padding of a [`UiLayoutTypeFlow`] node.
+/// Padding is a gap between the bounding box of the node and where its children are placed.
+/// ## 🛠️ Example
+/// ```
+/// # use bevy_lunex::*;
+/// let padding: UiFlowPadding = UiFlowPadding::x(Ab(16.0));
+/// ```
+#[derive(Debug, Default, Clone, Copy, PartialEq, Reflect)]
+pub struct UiFlowPadding {
+    /// Gap between the node's left edge and its children.
+    pub left: UiValue<f32>,
+    /// Gap between the node's right edge and its children.
+    pub right: UiValue<f32>,
+    /// Gap between the node's top edge and its children.
+    pub top: UiValue<f32>,
+    /// Gap between the node's bottom edge and its children.
+    pub bottom: UiValue<f32>,
+}
+/// Constructors
+impl UiFlowPadding {
+    /// Creates padding with the same value on all sides.
+    pub fn all(value: impl Into<UiValue<f32>>) -> Self {
+        let value = value.into();
+        Self { left: value, right: value, top: value, bottom: value }
+    }
+    /// Creates padding on the horizontal axis only.
+    pub fn x(value: impl Into<UiValue<f32>>) -> Self {
+        let value = value.into();
+        Self { left: value, right: value, ..Default::default() }
+    }
+    /// Creates padding on the vertical axis only.
+    pub fn y(value: impl Into<UiValue<f32>>) -> Self {
+        let value = value.into();
+        Self { top: value, bottom: value, ..Default::default() }
+    }
+}
+
+/// **Flow** - Dynamic layout type that participates in the ui flow. It is defined by how it takes
+/// up space inside its parent's flow ([`UiFlowSize`]) and by how its children are arranged
+/// ([`UiFlowDirection`], gap, padding, alignment). This is a flexbox-like layout model.
+///
+/// Nodes with this layout **are included in the ui flow** of their parent (if the parent also
+/// uses a flow layout). Nodes with [`UiLayoutType::Boundary`], [`UiLayoutType::Window`] or
+/// [`UiLayoutType::Solid`] layouts inside a flow container keep their absolute positioning.
+///
+/// ## Sizing semantics
+/// - [`UiFlowSize::Fit`] - The node hugs its content (text, image or children).
+/// - [`UiFlowSize::Grow`] - The node fills the available space, sharing it with other `Grow` siblings.
+/// - [`UiFlowSize::Fixed`] - The node is sized explicitly. Relative units ([`Rl`], [`Rw`], [`Rh`])
+///   resolve against the parent's inner content box (minus padding and gaps) and behave like
+///   percentages. They do not contribute to a `Fit` parent's content-hugging size.
+///
+/// ## 🛠️ Example
+/// ```
+/// # use bevy_lunex::{UiLayout, UiFlowSize, UiFlowDirection, Ab, Rl, Align};
+/// let layout: UiLayout = UiLayout::flow()
+///     .direction(UiFlowDirection::TopToBottom)
+///     .gap(Ab(8.0))
+///     .padding_all(Ab(16.0))
+///     .width(UiFlowSize::Grow)
+///     .height(UiFlowSize::Fit)
+///     .align_x(Align::CENTER)
+///     .pack();
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Reflect)]
+pub struct UiLayoutTypeFlow {
+    /// The direction in which child nodes are laid out.
+    pub direction: UiFlowDirection,
+    /// The width sizing of the node inside its parent's flow.
+    pub width: UiFlowAxis,
+    /// The height sizing of the node inside its parent's flow.
+    pub height: UiFlowAxis,
+    /// The gap between the node's bounding box and its children.
+    pub padding: UiFlowPadding,
+    /// The gap between child nodes along the layout direction.
+    pub gap: UiValue<f32>,
+    /// The alignment of children along the horizontal axis.
+    pub align_x: Align,
+    /// The alignment of children along the vertical axis.
+    pub align_y: Align,
+}
+impl Default for UiLayoutTypeFlow {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+/// Constructors
+impl UiLayoutTypeFlow {
+    /// Creates new empty Flow node layout.
+    pub const fn new() -> Self {
+        Self {
+            direction: UiFlowDirection::LeftToRight,
+            width: UiFlowAxis::new(UiFlowSize::Fit),
+            height: UiFlowAxis::new(UiFlowSize::Fit),
+            padding: UiFlowPadding { left: UiValue::new(), right: UiValue::new(), top: UiValue::new(), bottom: UiValue::new() },
+            gap: UiValue::new(),
+            align_x: Align::START,
+            align_y: Align::START,
+        }
+    }
+    /// Replaces the direction with a new value.
+    pub const fn direction(mut self, direction: UiFlowDirection) -> Self {
+        self.direction = direction;
+        self
+    }
+    /// Replaces the width sizing with a new value.
+    pub fn width(mut self, size: impl Into<UiFlowSize>) -> Self {
+        self.width.size = size.into();
+        self
+    }
+    /// Replaces the height sizing with a new value.
+    pub fn height(mut self, size: impl Into<UiFlowSize>) -> Self {
+        self.height.size = size.into();
+        self
+    }
+    /// Replaces the width minimum clamp with a new value.
+    pub fn min_width(mut self, min: impl Into<UiValue<f32>>) -> Self {
+        self.width.min = Some(min.into());
+        self
+    }
+    /// Replaces the width maximum clamp with a new value.
+    pub fn max_width(mut self, max: impl Into<UiValue<f32>>) -> Self {
+        self.width.max = Some(max.into());
+        self
+    }
+    /// Replaces the height minimum clamp with a new value.
+    pub fn min_height(mut self, min: impl Into<UiValue<f32>>) -> Self {
+        self.height.min = Some(min.into());
+        self
+    }
+    /// Replaces the height maximum clamp with a new value.
+    pub fn max_height(mut self, max: impl Into<UiValue<f32>>) -> Self {
+        self.height.max = Some(max.into());
+        self
+    }
+    /// Replaces the gap between children with a new value.
+    pub fn gap(mut self, gap: impl Into<UiValue<f32>>) -> Self {
+        self.gap = gap.into();
+        self
+    }
+    /// Replaces the padding with a new value on all sides.
+    pub fn padding_all(mut self, padding: impl Into<UiValue<f32>>) -> Self {
+        self.padding = UiFlowPadding::all(padding);
+        self
+    }
+    /// Replaces the padding with a new value on the horizontal axis.
+    pub fn padding_x(mut self, padding: impl Into<UiValue<f32>>) -> Self {
+        self.padding = UiFlowPadding::x(padding);
+        self
+    }
+    /// Replaces the padding with a new value on the vertical axis.
+    pub fn padding_y(mut self, padding: impl Into<UiValue<f32>>) -> Self {
+        self.padding = UiFlowPadding::y(padding);
+        self
+    }
+    /// Replaces the horizontal alignment with a new value.
+    pub fn align_x(mut self, align: impl Into<Align>) -> Self {
+        self.align_x = align.into();
+        self
+    }
+    /// Replaces the vertical alignment with a new value.
+    pub fn align_y(mut self, align: impl Into<Align>) -> Self {
+        self.align_y = align.into();
+        self
+    }
+    /// Pack the layout type into UiLayout
+    pub fn pack(self) -> UiLayout {
+        UiLayout::from(self)
+    }
+    /// Wrap the layout type into UiLayoutType
+    pub fn wrap(self) -> UiLayoutType {
+        UiLayoutType::from(self)
+    }
+    /// Computes the layout based on given parameters. Since flow layout depends on the whole tree,
+    /// this computes only the node's own box from its resolved size (relative units against the parent),
+    /// aligned within the parent as a fallback for when the flow engine is not available.
+    pub(crate) fn compute(&self, parent: &Rectangle2D, absolute_scale: f32, viewport_size: Vec2, font_size: f32) -> Rectangle2D {
+        let mut size = Vec2::new(
+            match self.width.size {
+                UiFlowSize::Fit => 0.0,
+                UiFlowSize::Grow => parent.size.x,
+                UiFlowSize::Fixed(v) => v.evaluate_axis(absolute_scale, parent.size, viewport_size, font_size, 0),
+            },
+            match self.height.size {
+                UiFlowSize::Fit => 0.0,
+                UiFlowSize::Grow => parent.size.y,
+                UiFlowSize::Fixed(v) => v.evaluate_axis(absolute_scale, parent.size, viewport_size, font_size, 1),
+            },
+        );
+        // Apply min/max clamps
+        if let Some(v) = self.width.min { size.x = size.x.max(v.evaluate_axis(absolute_scale, parent.size, viewport_size, font_size, 0)) }
+        if let Some(v) = self.width.max { size.x = size.x.min(v.evaluate_axis(absolute_scale, parent.size, viewport_size, font_size, 0)) }
+        if let Some(v) = self.height.min { size.y = size.y.max(v.evaluate_axis(absolute_scale, parent.size, viewport_size, font_size, 1)) }
+        if let Some(v) = self.height.max { size.y = size.y.min(v.evaluate_axis(absolute_scale, parent.size, viewport_size, font_size, 1)) }
+
+        // Align within parent (top-left relative)
+        let pos = Vec2::new(
+            (parent.size.x - size.x) * (self.align_x.0 + 1.0) / 2.0,
+            (parent.size.y - size.y) * (self.align_y.0 + 1.0) / 2.0,
+        );
+        Rectangle2D {
+            pos: -parent.size / 2.0 + pos + size / 2.0,
+            size,
+        }
+    }
+}
+
+
 // #====================#
 // #=== LAYOUT TYPES ===#
 
 /// **Ui Layout Type** - Enum holding all UI layout variants.
+/// The `Flow` variant is several times larger than the others because it carries
+/// a full set of `UiValue` parameters; the enum stays `Copy` for API ergonomics.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Copy, PartialEq, Reflect)]
 pub enum UiLayoutType {
     Boundary(UiLayoutTypeBoundary),
     Window(UiLayoutTypeWindow),
     Solid(UiLayoutTypeSolid),
+    Flow(UiLayoutTypeFlow),
 }
 impl UiLayoutType {
     /// Computes the layout based on given parameters.
@@ -130,6 +453,7 @@ impl UiLayoutType {
             UiLayoutType::Boundary(layout) => layout.compute(parent, absolute_scale, viewport_size, font_size),
             UiLayoutType::Window(layout) => layout.compute(parent, absolute_scale, viewport_size, font_size),
             UiLayoutType::Solid(layout) => layout.compute(parent, absolute_scale, viewport_size, font_size),
+            UiLayoutType::Flow(layout) => layout.compute(parent, absolute_scale, viewport_size, font_size),
         }
     }
 }
@@ -146,6 +470,11 @@ impl From<UiLayoutTypeWindow> for UiLayoutType {
 impl From<UiLayoutTypeSolid> for UiLayoutType {
     fn from(value: UiLayoutTypeSolid) -> Self {
         UiLayoutType::Solid(value)
+    }
+}
+impl From<UiLayoutTypeFlow> for UiLayoutType {
+    fn from(value: UiLayoutTypeFlow) -> Self {
+        UiLayoutType::Flow(value)
     }
 }
 

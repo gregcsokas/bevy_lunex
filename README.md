@@ -14,6 +14,8 @@ Blazingly fast retained ***layout engine*** for Bevy entities, built around vani
 
 * **Any aspect ratio:** Lunex is designed to support ALL window sizes out of the box without deforming. The built in layout types react nicely and intuitively to aspect ratio changes.
 
+* **Ui flow:** Build menus, sidebars and toolbars that react to their content and to the window size with the flexbox-like `UiLayout::flow()` layout model (inspired by [clay](https://github.com/nicbarker/clay)) - content hugging, space filling, relative sizing and text wrapping.
+
 * **Optimized:** Unlike immediate mode GUI systems, Bevy_Lunex is a retained layout engine. This means the layout is calculated and stored, reducing the need for constant recalculations and offering potential performance benefits, especially for static or infrequently updated UIs.
 
 * **ECS focused:** Since it's built with ECS, you can extend or customize the behavior of your UI by simply adding or modifying components. The interactivity is done by regular systems and events.

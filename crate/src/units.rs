@@ -738,6 +738,60 @@ macro_rules! bind_value {
 }
 bind_value!((Ab, ab), (Rl, rl), (Rw, rw), (Rh, rh), (Em, em), (Vp, vp), (Vw, vw), (Vh, vh));
 
+// # Impl flow-specific helpers on UiValue(f32)
+impl UiValue<f32> {
+    /// Evaluates the value with per-axis semantics for the relative units.
+    /// Unlike [`UiValueEvaluate`], `Rl` resolves against the axis of the parent size
+    /// (x for axis `0`, y for axis `1`) while `Rw`/`Rh` always resolve against their own axis.
+    /// This is used by the flow layout engine where a scalar value is applied on a known axis.
+    pub fn evaluate_axis(&self, absolute_scale: f32, parent_size: Vec2, viewport_size: Vec2, font_size: f32, axis: usize) -> f32 {
+        let mut out = 0.0;
+        if let Some(v) = self.ab { out += v * absolute_scale }
+        if let Some(v) = self.rl { out += (v/100.0) * if axis == 0 { parent_size.x } else { parent_size.y } }
+        if let Some(v) = self.rw { out += (v/100.0) * parent_size.x }
+        if let Some(v) = self.rh { out += (v/100.0) * parent_size.y }
+        if let Some(v) = self.em { out += v * font_size }
+        if let Some(v) = self.vp { out += (v/100.0) * if axis == 0 { viewport_size.x } else { viewport_size.y } }
+        if let Some(v) = self.vw { out += (v/100.0) * viewport_size.x }
+        if let Some(v) = self.vh { out += (v/100.0) * viewport_size.y }
+        out
+    }
+
+    /// Evaluates only the units that are always resolvable ( [`Ab`], [`Em`], [`Vp`], [`Vw`], [`Vh`] ).
+    /// Units relative to the parent ( [`Rl`], [`Rw`], [`Rh`] ) are dropped, which is useful
+    /// when computing content-hugging sizes before the parent size is known.
+    pub fn evaluate_intrinsic(&self, absolute_scale: f32, viewport_size: Vec2, font_size: f32, axis: usize) -> f32 {
+        let mut out = 0.0;
+        if let Some(v) = self.ab { out += v * absolute_scale }
+        if let Some(v) = self.em { out += v * font_size }
+        if let Some(v) = self.vp { out += (v/100.0) * if axis == 0 { viewport_size.x } else { viewport_size.y } }
+        if let Some(v) = self.vw { out += (v/100.0) * viewport_size.x }
+        if let Some(v) = self.vh { out += (v/100.0) * viewport_size.y }
+        out
+    }
+
+    /// Linearly interpolates between two values unit-by-unit. Missing units are treated as zero,
+    /// allowing transitions between different unit kinds (e.g. from [`Ab`] to [`Rl`]).
+    pub fn lerp(&self, other: &Self, t: f32) -> Self {
+        let l = |a: Option<f32>, b: Option<f32>| match (a, b) {
+            (Some(a), Some(b)) => Some(a + (b - a) * t),
+            (Some(a), None) => Some(a * (1.0 - t)),
+            (None, Some(b)) => Some(b * t),
+            (None, None) => None,
+        };
+        Self {
+            ab: l(self.ab, other.ab),
+            rl: l(self.rl, other.rl),
+            rw: l(self.rw, other.rw),
+            rh: l(self.rh, other.rh),
+            em: l(self.em, other.em),
+            vp: l(self.vp, other.vp),
+            vw: l(self.vw, other.vw),
+            vh: l(self.vh, other.vh),
+        }
+    }
+}
+
 // # Impl (A, B) => UiValue(Vec2)
 impl <A, B> From<(A, B)> for UiValue<Vec2> where
     A: Into<UiValue<f32>>,

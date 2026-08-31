@@ -33,6 +33,7 @@ pub (crate) use bevy_derive::*;
 pub(crate) use bevy_app::PluginGroupBuilder;
 pub(crate) use bevy_sprite::Anchor;
 pub(crate) use bevy_text::TextLayoutInfo;
+pub(crate) use bevy_text::TextBounds;
 pub(crate) use bevy_platform::collections::HashMap;
 pub(crate) use colored::Colorize;
 #[cfg(feature = "text3d")]
@@ -76,6 +77,7 @@ pub mod prelude {
     pub use crate::cursor::prelude::*;
     pub use crate::layouts::prelude::*;
     pub use crate::states::prelude::*;
+    pub use crate::flow::prelude::*;
     pub use crate::units::*;
 
     // Export stuff from other crates
@@ -91,6 +93,8 @@ mod cursor;
 pub use cursor::*;
 mod layouts;
 pub use layouts::*;
+mod flow;
+pub use flow::*;
 mod picking;
 pub use picking::*;
 mod states;
@@ -391,6 +395,26 @@ pub fn system_debug_print_data(
                             "}",
                         );
                     },
+                    Some(UiLayoutType::Flow(flow)) => {
+                        let size_to_nicestr = |size: &UiFlowSize| match size {
+                            UiFlowSize::Fit => "Fit".green().to_string(),
+                            UiFlowSize::Grow => "Grow".green().to_string(),
+                            UiFlowSize::Fixed(v) => v.to_nicestr(),
+                        };
+                        output_string += &format!(" ➜ {} {} dir: {:?}, w: {}, h: {}, gap: {}, pad: ({}, {}, {}, {}) {}",
+                            "Flow".bold(),
+                            "{",
+                            flow.direction,
+                            size_to_nicestr(&flow.width.size),
+                            size_to_nicestr(&flow.height.size),
+                            flow.gap.to_nicestr(),
+                            flow.padding.left.to_nicestr(),
+                            flow.padding.top.to_nicestr(),
+                            flow.padding.right.to_nicestr(),
+                            flow.padding.bottom.to_nicestr(),
+                            "}",
+                        );
+                    },
                     None => {},
                 }
 
@@ -479,6 +503,22 @@ impl UiLayout {
     pub fn solid() -> UiLayoutTypeSolid {
         UiLayoutTypeSolid::new()
     }
+    /// **Flow** - Dynamic layout type that participates in the ui flow. It is defined by how it
+    /// takes up space inside its parent's flow and by how its children are arranged.
+    /// ## 🛠️ Example
+    /// ```
+    /// # use bevy_lunex::{UiLayout, UiFlowSize, UiFlowDirection, Ab, Rl, Align};
+    /// let layout: UiLayout = UiLayout::flow()
+    ///     .direction(UiFlowDirection::TopToBottom)
+    ///     .gap(Ab(8.0))
+    ///     .width(UiFlowSize::Grow)
+    ///     .height(Rl(50.0))
+    ///     .align_x(Align::CENTER)
+    ///     .pack();
+    /// ```
+    pub fn flow() -> UiLayoutTypeFlow {
+        UiLayoutTypeFlow::new()
+    }
     /// Create multiple layouts for a different states at once.
     pub fn new(value: Vec<(TypeId, impl Into<UiLayoutType>)>) -> Self {
         let mut map = HashMap::new();
@@ -517,6 +557,16 @@ impl UiLayout {
         let UiLayoutType::Solid(solid) = self.layouts.get_mut(&id)? else { return None; };
         Some(solid)
     }
+    /// Try to return a reference to a stored layout
+    pub fn get_flow(&self, id: TypeId) -> Option<&UiLayoutTypeFlow> {
+        let UiLayoutType::Flow(flow) = self.layouts.get(&id)? else { return None; };
+        Some(flow)
+    }
+    /// Try to return a mut reference to a stored layout
+    pub fn get_mut_flow(&mut self, id: TypeId) -> Option<&mut UiLayoutTypeFlow> {
+        let UiLayoutType::Flow(flow) = self.layouts.get_mut(&id)? else { return None; };
+        Some(flow)
+    }
 }
 /// Conversion implementations
 impl From<UiLayoutType> for UiLayout {
@@ -546,9 +596,57 @@ impl From<UiLayoutTypeSolid> for UiLayout {
         UiLayout::from(value)
     }
 }
+impl From<UiLayoutTypeFlow> for UiLayout {
+    fn from(value: UiLayoutTypeFlow) -> Self {
+        let value: UiLayoutType = value.into();
+        UiLayout::from(value)
+    }
+}
 
 pub fn system_recompute_on_change <C: Component>(query: Query<Entity, Changed<C>>, mut commands: Commands){
     if !query.is_empty() { commands.trigger(RecomputeUiLayout); }
+}
+
+/// This observer triggers a UI recompute whenever a hierarchy edge is added anywhere.
+/// Flow layouts depend on the sibling structure, so newly inserted children have to be laid out.
+pub fn observer_recompute_on_hierarchy_add(
+    _trigger: On<Add, ChildOf>,
+    mut commands: Commands,
+) {
+    commands.trigger(RecomputeUiLayout);
+}
+
+/// This observer triggers a UI recompute whenever a hierarchy edge is removed anywhere.
+/// This covers reparenting and despawning nodes out of a flow container.
+pub fn observer_recompute_on_hierarchy_remove(
+    _trigger: On<Remove, ChildOf>,
+    mut commands: Commands,
+) {
+    commands.trigger(RecomputeUiLayout);
+}
+
+/// This system triggers a UI recompute when the measured size of a text node changes.
+/// Flow layouts read the measurement directly, so they have to be informed about it.
+pub fn system_recompute_on_text_change(
+    query: Query<(), (With<UiLayout>, Changed<TextLayoutInfo>)>,
+    mut commands: Commands,
+) {
+    if !query.is_empty() { commands.trigger(RecomputeUiLayout); }
+}
+
+/// This system triggers a UI recompute while a flow node's image asset has not been loaded yet,
+/// so that the node is sized once the image dimensions become available.
+pub fn system_recompute_on_unloaded_image(
+    images: Res<Assets<Image>>,
+    query: Query<(&UiLayout, &Sprite, &UiImageSize)>,
+    mut commands: Commands,
+) {
+    for (layout, sprite, _) in &query {
+        if matches!(layout.layouts.get(&UiBase::id()), Some(UiLayoutType::Flow(_))) && images.get(&sprite.image).is_none() {
+            commands.trigger(RecomputeUiLayout);
+            return;
+        }
+    }
 }
 
 /// **Ui Depth** - This component overrides the default Z axis (depth) stacking order.
@@ -569,9 +667,16 @@ impl Default for UiDepth {
 
 
 /// This system traverses the hierarchy and computes all nodes.
+/// Absolute layouts ([`UiLayoutType::Boundary`], [`UiLayoutType::Window`], [`UiLayoutType::Solid`])
+/// are computed per node as before, while flow layouts ([`UiLayoutType::Flow`]) are extracted into
+/// a flat arena and computed by the flow engine.
+#[allow(clippy::type_complexity, private_interfaces)]
 pub fn system_layout_compute(
     root_query: Query<(&UiLayoutRoot, &Transform, &Dimension, &Children), (Without<UiLayout>, Or<(Changed<UiLayoutRoot>, Changed<Dimension>)>)>,
-    mut node_query: Query<(&UiLayout, &UiDepth, &UiState, &mut Transform, &mut Dimension, Option<&Children>), Without<UiLayoutRoot>>,
+    mut node_query: Query<(&UiLayout, &UiDepth, &UiState, &mut Transform, &mut Dimension, Option<&Children>, Option<&TextLayoutInfo>, Option<&Sprite>, Option<&UiImageSize>, Option<&UiFlowText>, Option<&TextBounds>), Without<UiLayoutRoot>>,
+    images: Res<Assets<Image>>,
+    mut commands: Commands,
+    mut flow: Local<FlowLayout>,
 ) {
     for (root, root_transform, root_dimension, root_children) in &root_query {
         // Size of the viewport
@@ -579,44 +684,157 @@ pub fn system_layout_compute(
             pos: root_transform.translation.xy(),
             size: **root_dimension,
         };
+        let flow_context = UiFlowContext {
+            abs_scale: root.abs_scale,
+            viewport: root_rectangle.size,
+            font_size: 16.0,
+        };
 
+        // #=== FLOW EXTRACTION ===#
+        // Traverse the whole Ui-tree and extract flow nodes into the flat arena.
+        // The `None` slot marks that the node's nearest flow ancestor is outside of the current
+        // flow region (an absolute node in between), making the node a new flow subtree root.
+        flow.clear();
+        let mut flow_map: HashMap<Entity, usize> = HashMap::default();
+        let mut root_flow_children: Vec<usize> = Vec::new();
+        let mut stack: Vec<(Entity, Option<usize>, bool)> = root_children.iter().map(|child| (child, None, true)).rev().collect();
+        while let Some((entity, flow_parent, is_root_child)) = stack.pop() {
+            let Ok((node_layout, _node_depth, node_state, _node_transform, _node_dimension, node_children_option, node_text_info, node_sprite, node_image_size, node_flow_text, _node_text_bounds)) = node_query.get(entity) else { continue };
+
+            if let Some(config) = resolve_flow_config(node_layout, node_state) {
+                // Resolve the intrinsic (measured) size of the node, if any.
+                let mut item = FlowItem::new(config);
+                if node_flow_text.is_some_and(|text| text.wrap) {
+                    item = item.with_wrap_text();
+                }
+                let mut waiting_for_assets = false;
+                if let Some(text_info) = node_text_info {
+                    if text_info.size.y == 0.0 { waiting_for_assets = true; }
+                    item = item.with_intrinsic(text_info.size);
+                } else if let (Some(sprite), Some(image_size)) = (node_sprite, node_image_size) {
+                    if let Some(image) = images.get(&sprite.image) {
+                        let x = (image_size.get_x() * image.width() as f32).evaluate_intrinsic(flow_context.abs_scale, flow_context.viewport, flow_context.font_size, 0);
+                        let y = (image_size.get_y() * image.height() as f32).evaluate_intrinsic(flow_context.abs_scale, flow_context.viewport, flow_context.font_size, 1);
+                        item = item.with_intrinsic(Vec2::new(x, y));
+                    } else {
+                        waiting_for_assets = true;
+                    }
+                }
+                if waiting_for_assets {
+                    // The text or image has not been measured yet - recompute again later.
+                    commands.trigger(RecomputeUiLayout);
+                }
+                item.entity = entity;
+                let index = flow.push(flow_parent, item);
+                flow_map.insert(entity, index);
+                if flow_parent.is_none() && is_root_child {
+                    root_flow_children.push(index);
+                }
+
+                if let Some(node_children) = node_children_option {
+                    stack.extend(node_children.iter().map(|child| (child, Some(index), false)).rev());
+                }
+            } else {
+                // Absolute node - it breaks the flow chain for its descendants.
+                if let Some(node_children) = node_children_option {
+                    stack.extend(node_children.iter().map(|child| (child, None, false)).rev());
+                }
+            }
+        }
+
+        // #=== VIRTUAL ROOT CONTAINER ===#
+        // The Ui-layout root acts as an implicit flow container (left to right, no gap or padding)
+        // so that its flow children are laid out together. Absolute children coexist as usual.
+        if !root_flow_children.is_empty() {
+            let virtual_root = flow.push(None, FlowItem::new(
+                UiLayoutTypeFlow::new()
+                    .width(root_rectangle.size.x)
+                    .height(root_rectangle.size.y),
+            ));
+            for &index in &root_flow_children {
+                flow.reparent(index, virtual_root);
+            }
+            flow.compute(virtual_root, root_rectangle.size, &flow_context);
+
+            // Feed the assigned widths back into wrap-enabled text nodes.
+            for sub_index in flow.subtree(virtual_root) {
+                if let Some(width) = flow.wrap_text_width(sub_index) {
+                    let changed = node_query.get(flow.entity(sub_index))
+                        .map(|(_, _, _, _, _, _, _, _, _, _, bounds)| bounds.is_none_or(|b| b.width.is_none_or(|current| (current - width).abs() > 0.01)))
+                        .unwrap_or(true);
+                    if changed {
+                        commands.entity(flow.entity(sub_index)).try_insert(TextBounds::new_horizontal(width));
+                    }
+                }
+            }
+        }
+
+        // #=== HYBRID COMPUTE TRAVERSAL ===#
         // Stack-based traversal
         let mut stack: Vec<(Entity, Rectangle2D, f32)> = root_children.iter().map(|child| (child, root_rectangle, 0.0)).rev().collect();
 
         while let Some((current_entity, parent_rectangle, depth)) = stack.pop() {
-            if let Ok((node_layout, node_depth, node_state, mut node_transform, mut node_dimension, node_children_option)) = node_query.get_mut(current_entity) {
-                // Compute all layouts for the node
-                let mut computed_rectangles = Vec::with_capacity(node_layout.layouts.len());
-                for (state, layout) in &node_layout.layouts {
-                    computed_rectangles.push((state, layout.compute(&parent_rectangle, root.abs_scale, root_rectangle.size, 16.0)));
-                }
+            if let Ok((node_layout, node_depth, node_state, mut node_transform, mut node_dimension, node_children_option, _node_text_info, _node_sprite, _node_image_size, _node_flow_text, node_text_bounds)) = node_query.get_mut(current_entity) {
 
-                // Normalize the active state weights
-                let mut total_weight = 0.0;
-                for (state, _) in &node_layout.layouts {
-                    if let Some(weight) = node_state.states.get(state) {
-                        total_weight += weight;
-                    }
-                }
+                // Flow node - computed by the flow engine
+                let node_rectangle = if let Some(&index) = flow_map.get(&current_entity) {
+                    // The root of a flow subtree is computed here with the parent's box as the constraint.
+                    if flow.is_root(index) {
+                        flow.compute(index, parent_rectangle.size, &flow_context);
 
-                // Combine the state rectangles into one normalized
-                let mut node_rectangle = Rectangle2D::EMPTY;
-
-                // Use base if no active state
-                if total_weight == 0.0
-                    && let Some((_, base_rectangle)) = computed_rectangles.iter().find(|(state, _)| **state == UiBase::id()) {
-                    node_rectangle.pos += base_rectangle.pos;
-                    node_rectangle.size += base_rectangle.size;
-
-                // Combine the active states into one rectangle
-                } else {
-                    for (state, rectangle) in computed_rectangles {
-                        if let Some(weight) = node_state.states.get(state) {
-                            node_rectangle.pos += rectangle.pos * (weight / total_weight);
-                            node_rectangle.size += rectangle.size * (weight / total_weight);
+                        // Feed the assigned widths back into wrap-enabled text nodes.
+                        for sub_index in flow.subtree(index) {
+                            if let Some(width) = flow.wrap_text_width(sub_index) {
+                                let changed = node_text_bounds.is_none_or(|bounds| bounds.width.is_none_or(|current| (current - width).abs() > 0.01));
+                                if changed {
+                                    commands.entity(flow.entity(sub_index)).try_insert(TextBounds::new_horizontal(width));
+                                }
+                            }
                         }
                     }
-                }
+                    let (rel_pos, size) = flow.result(index);
+                    // Convert from top-left relative to center-relative (y-down), like the other layouts.
+                    Rectangle2D {
+                        pos: rel_pos + size / 2.0 - parent_rectangle.size / 2.0,
+                        size,
+                    }
+
+                // Absolute node - computed per state and blended, as before
+                } else {
+                    // Compute all layouts for the node
+                    let mut computed_rectangles = Vec::with_capacity(node_layout.layouts.len());
+                    for (state, layout) in &node_layout.layouts {
+                        computed_rectangles.push((state, layout.compute(&parent_rectangle, root.abs_scale, root_rectangle.size, 16.0)));
+                    }
+
+                    // Normalize the active state weights
+                    let mut total_weight = 0.0;
+                    for (state, _) in &node_layout.layouts {
+                        if let Some(weight) = node_state.states.get(state) {
+                            total_weight += weight;
+                        }
+                    }
+
+                    // Combine the state rectangles into one normalized
+                    let mut node_rectangle = Rectangle2D::EMPTY;
+
+                    // Use base if no active state
+                    if total_weight == 0.0
+                        && let Some((_, base_rectangle)) = computed_rectangles.iter().find(|(state, _)| **state == UiBase::id()) {
+                        node_rectangle.pos += base_rectangle.pos;
+                        node_rectangle.size += base_rectangle.size;
+
+                    // Combine the active states into one rectangle
+                    } else {
+                        for (state, rectangle) in computed_rectangles {
+                            if let Some(weight) = node_state.states.get(state) {
+                                node_rectangle.pos += rectangle.pos * (weight / total_weight);
+                                node_rectangle.size += rectangle.size * (weight / total_weight);
+                            }
+                        }
+                    }
+                    node_rectangle
+                };
 
                 // Save the computed layout without marking unchanged outputs as changed.
                 // Downstream systems use Bevy change detection to rebuild render assets,
@@ -697,6 +915,12 @@ pub fn system_layout_compute(
 pub struct UiState {
     /// Stored transition per state
     states: HashMap<TypeId, f32>,
+}
+impl UiState {
+    /// Returns the transition value of a state, if it is tracked on this node.
+    pub fn weight(&self, id: &TypeId) -> Option<f32> {
+        self.states.get(id).copied()
+    }
 }
 /// Default constructor
 impl Default for UiState {
@@ -1237,6 +1461,8 @@ impl Plugin for UiLunexPlugin {
 
         // Add observers
         app.add_observer(observer_touch_layout_root);
+        app.add_observer(observer_recompute_on_hierarchy_add);
+        app.add_observer(observer_recompute_on_hierarchy_remove);
 
         // PRE-COMPUTE SYSTEMS
         app.add_systems(PostUpdate, (
@@ -1245,6 +1471,8 @@ impl Plugin for UiLunexPlugin {
             system_text_size_to_layout.after(bevy_sprite::update_text2d_layout),
             system_image_size_to_layout,
             system_recompute_on_change::<UiLayout>,
+            system_recompute_on_text_change,
+            system_recompute_on_unloaded_image,
 
         ).chain().in_set(UiSystems::PreCompute));
 

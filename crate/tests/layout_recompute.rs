@@ -1,6 +1,7 @@
 use bevy_app::{App, PostUpdate};
 use bevy_asset::Assets;
 use bevy_ecs::prelude::*;
+use bevy_image::prelude::*;
 use bevy_math::Vec2;
 use bevy_mesh::{Mesh, Mesh3d};
 use bevy_transform::components::Transform;
@@ -13,6 +14,7 @@ use bevy_lunex::{
 fn unchanged_layout_recompute_keeps_3d_panel_mesh() {
     let mut app = App::new();
     app.init_resource::<Assets<Mesh>>();
+    app.init_resource::<Assets<Image>>();
     app.add_systems(
         PostUpdate,
         (

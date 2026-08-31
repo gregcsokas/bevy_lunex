@@ -51,3 +51,26 @@ UiLayout::solid()
     .align_x(-0.74)
     .pack(),
 ```
+
+## Flow
+Defined by **sizing** and **child arrangement**, it participates in the ui flow of its parent.
+- **direction** - Whether children are laid out left-to-right or top-to-bottom
+- **width**/**height** - `Fit` (hug content), `Grow` (fill available space) or `Fixed` (explicit size)
+- **gap** - Spacing between children along the direction axis
+- **padding** - Spacing between the node's bounding box and its children
+- **align_x**/**align_y** - Alignment of children within the leftover space
+
+> [!TIP]
+> This is the layout to reach for when building menus, sidebars, toolbars or
+> any structure that should react to its content or to the window size.
+> See the [Flow Layout](../flow.md) chapter for details.
+
+```rust, noplayground
+UiLayout::flow()
+    .direction(UiFlowDirection::TopToBottom)
+    .gap(Ab(10.0))
+    .padding_all(Ab(20.0))
+    .width(Ab(300.0))
+    .height(UiFlowSize::Grow)
+    .pack(),
+```
