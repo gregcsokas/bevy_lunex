@@ -1,34 +1,73 @@
 //! A showcase of the flow layout model: stack ordering, the `Sp` space unit,
 //! justification/alignment margins, line wrapping and grid tracks.
+//!
+//! Hold the left mouse button and drag: the UI root resizes to span from the
+//! window's top-left corner to your cursor - a live demo of the layout
+//! recomputing without resizing (and thrashing) the actual OS window.
 
 use bevy::prelude::*;
 use bevy_lunex::prelude::*;
 
 fn main() -> AppExit {
     App::new()
-        .add_plugins((DefaultPlugins, UiLunexPlugins, UiLunexDebugPlugin::<0, 0>))
+        .add_plugins((DefaultPlugins, UiLunexPlugins))
         .add_systems(Startup, setup)
+        .add_systems(Update, resize_root_by_drag)
         .run()
 }
 
-fn setup(mut commands: Commands) {
+fn setup(mut commands: Commands, window: Single<&Window>) {
     commands.spawn((
         Camera2d, UiSourceCamera::<0>,
         Transform::from_translation(Vec3::Z * 1000.0),
     ));
 
+    let window_size = window.size();
+
     // The UI root acts as an implicit left-to-right flow container, so the
-    // three showcase columns split the window width evenly.
+    // three showcase columns split the root width evenly. Its `Dimension` is
+    // driven manually by the drag system instead of the camera viewport.
+    let (x, y) = top_left_anchor(window_size, window_size);
     commands.spawn((
         Name::new("Root"),
         UiLayoutRoot::new_2d(),
-        UiFetchFromCamera::<0>,
+        Dimension(window_size),
+        Transform::from_xyz(x, y, 0.0),
+        Sprite::from_color(Color::srgb(0.03, 0.04, 0.05), Vec2::ONE),
     ))
     .with_children(|ui| {
         ordering_panel(ui);
         justify_panel(ui);
         wrap_grid_panel(ui);
     });
+}
+
+/// The smallest root size the drag allows.
+const ROOT_MIN: Vec2 = Vec2::new(200.0, 100.0);
+
+/// Returns the transform position that anchors a root box of `size` at the
+/// window's top-left corner (the root box is centered on its transform).
+fn top_left_anchor(size: Vec2, window_size: Vec2) -> (f32, f32) {
+    (-window_size.x / 2.0 + size.x / 2.0, window_size.y / 2.0 - size.y / 2.0)
+}
+
+/// While the left mouse button is held, resizes the UI root so it spans from
+/// the window's top-left corner to the cursor. On release, the size stays.
+fn resize_root_by_drag(
+    mouse: Res<ButtonInput<MouseButton>>,
+    window: Single<&Window>,
+    mut roots: Query<(&mut Dimension, &mut Transform), With<UiLayoutRoot>>,
+) {
+    if !mouse.pressed(MouseButton::Left) { return }
+    let Some(cursor) = window.cursor_position() else { return };
+    let window_size = window.size();
+    let size = cursor.clamp(ROOT_MIN, window_size);
+    let (x, y) = top_left_anchor(size, window_size);
+    for (mut dimension, mut transform) in &mut roots {
+        **dimension = size;
+        transform.translation.x = x;
+        transform.translation.y = y;
+    }
 }
 
 /// Spawns a dark panel filling its share of the window and runs the children spawner inside.
@@ -154,6 +193,8 @@ fn wrap_grid_panel(ui: &mut ChildSpawnerCommands) {
         });
 
         // === Flipped wrapping: the first line sits at the bottom edge. ===
+        // The fixed height leaves visible empty space above whenever the lines do not
+        // fill it (at the narrowest width the items wrap one per line and exactly fill it).
         panel.spawn((
             Name::new("Wrap flipped"),
             UiLayout::flow()
@@ -163,12 +204,12 @@ fn wrap_grid_panel(ui: &mut ChildSpawnerCommands) {
                 .gap(Ab(6.0))
                 .padding_all(Ab(8.0))
                 .width(UiFlowSize::Grow)
-                .height(Ab(116.0))
+                .height(Ab(142.0))
                 .pack(),
             Sprite::from_color(Color::srgb(0.15, 0.17, 0.22), Vec2::ONE),
         ))
         .with_children(|wrap| {
-            for i in 0..7 {
+            for i in 0..4 {
                 wrap.spawn((
                     Name::new(format!("Flipped {i}")),
                     UiLayout::flow().width(Ab(64.0)).height(Ab(24.0)).pack(),
