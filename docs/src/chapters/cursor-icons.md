@@ -46,6 +46,10 @@ zoomed, and emits picking events just like a real pointer.
 > `SoftwareCursor` automatically attaches `PointerId` and `Pickable::IGNORE`, so the cursor
 > entity itself never interferes with picking.
 
+> [!WARNING]
+> The software cursor is rendered as a `Sprite`, which only renders through a `Camera2d`.
+> Spawn it under your 2D UI camera, or under a dedicated 2D overlay camera when your UI is 3D.
+
 ### Texture atlas cursors
 
 If your cursor sprite is a texture atlas, you can bind specific cursor icons to atlas indices

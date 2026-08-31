@@ -38,6 +38,10 @@ commands.spawn((
 });
 ```
 
+> [!TIP]
+> If your camera moves, spawn the root as a **child of the camera** instead — the UI then follows
+> the camera around like a HUD. Keep `UiFetchFromCamera` so the root stays sized to the viewport.
+
 Every child of the root becomes a Ui-Node. You attach visuals to the nodes directly — pick
 whatever fits your use case:
 

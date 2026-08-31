@@ -39,8 +39,8 @@ ui.spawn((
 ```
 
 > [!NOTE]
-> In a 3D root (`new_3d()`), the depth value is scaled by `0.001`, so 1 depth layer equals
-> 1 millimeter in world units. This keeps the stacking subtle but visible enough to fix
+> In a 3D root (`new_3d()`), the depth value is scaled by `0.001`, so 1000 depth layers equal
+> one world unit. This keeps the stacking subtle but visible enough to fix
 > Z-fighting between overlapping nodes.
 
 ## Fixing Z-fighting

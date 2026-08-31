@@ -9,8 +9,9 @@ Both use `UiLayoutRoot::new_3d()`, which scales the depth stacking by `0.001` so
 typical "1 pixel per depth layer" of 2D becomes sane world units.
 
 > [!IMPORTANT]
-> Unlike 2D, you don't need `UiSourceCamera` / `UiFetchFromCamera` — a 3D root has a fixed size
-> defined by the `Dimension` component in world units.
+> A worldspace root is sized manually with the `Dimension` component in world units. A HUD root,
+> on the other hand, needs `UiFetchFromCamera` paired with `UiSourceCamera` on the camera to keep
+> itself synchronized with the camera's viewport — the same mechanism as in 2D.
 
 ## Worldspace UI
 
@@ -38,7 +39,12 @@ Spawn the root as a **child of a `Camera3d`** — it then follows the camera aro
 transform for the offset:
 
 ```rust, noplayground
-commands.spawn((Camera3d::default(), /* ... */)).with_children(|camera| {
+commands.spawn((
+    Camera3d::default(),
+    // Mark the camera as the UI source for index 0
+    UiSourceCamera::<0>,
+    // ...
+)).with_children(|camera| {
 
     // Spawn the HUD UI panel
     camera.spawn((
@@ -46,8 +52,8 @@ commands.spawn((Camera3d::default(), /* ... */)).with_children(|camera| {
         UiRoot3d,
         // Use this constructor to init 3D settings
         UiLayoutRoot::new_3d(),
-        // Provide default size instead of camera
-        Dimension::from((0.5, 0.2)),
+        // Keep the UI synchronized with camera viewport size
+        UiFetchFromCamera::<0>,
         // The location of the UI panel relative to the camera
         Transform::from_xyz(-0.25, 0.0, -0.8)
             .with_rotation(Quat::from_rotation_y(40.0_f32.to_radians())),
@@ -57,13 +63,22 @@ commands.spawn((Camera3d::default(), /* ... */)).with_children(|camera| {
 });
 ```
 
+> [!NOTE]
+> When the camera uses an **orthographic** projection, the fetched viewport size is multiplied
+> by the projection scale, converting it into world units. For panels with a fixed world size,
+> you can instead provide a fixed `Dimension::from((0.5, 0.2))` — that is what the `hud` example
+> does.
+
 ## Node visuals
 
 Since everything lives in the 3D world, nodes render through meshes:
 
 - `UiMeshPlane3d` + `MeshMaterial3d<StandardMaterial>` - Panels, see [Meshes](meshes.md).
 - `Text3d` - Text rendered via `bevy_rich_text3d`, see [Text](text.md).
-- `Sprite` - Also works in 3D space.
+
+> [!WARNING]
+> `Sprite` does **not** work in 3D — sprites only render through a `Camera2d`. In 3D UIs, use
+> meshes (`UiMeshPlane3d`) or `Text3d` for node visuals instead.
 
 > [!TIP]
 > The `UiRoot3d` marker is propagated down the whole hierarchy automatically. You can check any
