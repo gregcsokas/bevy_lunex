@@ -54,11 +54,15 @@ UiLayout::solid()
 
 ## Flow
 Defined by **sizing** and **child arrangement**, it participates in the ui flow of its parent.
-- **direction** - Whether children are laid out left-to-right or top-to-bottom
-- **width**/**height** - `Fit` (hug content), `Grow` (fill available space) or `Fixed` (explicit size)
+- **direction** - Whether children are laid out left-to-right, right-to-left, top-to-bottom or bottom-to-top
+- **width**/**height** - `Fit` (hug content), `Grow` (claim a share of the leftover space) or `Fixed` (explicit size, `Sp` components claim leftover)
 - **gap** - Spacing between children along the direction axis
 - **padding** - Spacing between the node's bounding box and its children
-- **align_x**/**align_y** - Alignment of children within the leftover space
+- **margin** - Spacing around the node within its parent's flow (`Sp` claims leftover space)
+- **align** - Cross-axis alignment of children, expanded into default `Sp` margins
+- **justify** - Main-axis justification of children, expanded into default `Sp` margins
+- **wrap** - Pack children onto multiple lines (`Fit` cross sizing then hugs the lines)
+- **grid** - Explicit main-axis tracks (`Fit`/`Fixed`/`Sp`), items fill their track
 
 > [!TIP]
 > This is the layout to reach for when building menus, sidebars, toolbars or

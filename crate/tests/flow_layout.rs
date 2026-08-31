@@ -6,8 +6,9 @@ use bevy_math::{Vec2, Vec3};
 use bevy_mesh::Mesh;
 use bevy_transform::components::Transform;
 use bevy_lunex::{
-    Ab, Dimension, Rl, UiFlowSize, UiLayout, UiLayoutRoot, observer_recompute_on_hierarchy_add,
-    observer_recompute_on_hierarchy_remove, observer_touch_layout_root, system_layout_compute,
+    Ab, Align, Dimension, Rl, Sp, UiFlowDirection, UiFlowSize, UiJustify, UiLayout, UiLayoutRoot,
+    observer_recompute_on_hierarchy_add, observer_recompute_on_hierarchy_remove,
+    observer_touch_layout_root, system_layout_compute,
 };
 
 /// A minimal app with the layout compute system and the recompute observers.
@@ -348,4 +349,262 @@ fn flow_relative_sizing_in_hierarchy() {
     let half_t = translation_of(&app, half);
     let quarter_t = translation_of(&app, quarter);
     assert!((quarter_t.x - half_t.x - 210.0).abs() <= 0.1, "half {half_t}, quarter {quarter_t}");
+}
+
+#[test]
+fn flow_sp_sizing_proportional() {
+    let mut app = test_app();
+    let root = spawn_root(&mut app, Vec2::new(1000.0, 600.0));
+
+    let a = app
+        .world_mut()
+        .spawn((
+            UiLayout::flow().width(Sp(3.0)).height(Ab(50.0)).pack(),
+            ChildOf(root),
+        ))
+        .id();
+    let b = app
+        .world_mut()
+        .spawn((
+            UiLayout::flow().width(Sp(1.0)).height(Ab(50.0)).pack(),
+            ChildOf(root),
+        ))
+        .id();
+
+    app.update();
+
+    // 3 Sp vs 1 Sp split the 1000px window 3:1.
+    assert_vec2(dimension_of(&app, a), Vec2::new(750.0, 50.0));
+    assert_vec2(dimension_of(&app, b), Vec2::new(250.0, 50.0));
+    let a_t = translation_of(&app, a);
+    let b_t = translation_of(&app, b);
+    // `a` spans [0, 750] (center -125), `b` spans [750, 1000] (center +375).
+    assert!((a_t.x - (-125.0)).abs() <= 0.1, "a: {a_t}");
+    assert!((b_t.x - 375.0).abs() <= 0.1, "b: {b_t}");
+}
+
+#[test]
+fn flow_justify_space_between() {
+    let mut app = test_app();
+    let root = spawn_root(&mut app, Vec2::new(1000.0, 600.0));
+
+    let container = app
+        .world_mut()
+        .spawn((
+            UiLayout::flow().width(Ab(1000.0)).height(Ab(100.0)).justify(UiJustify::SpaceBetween).pack(),
+            ChildOf(root),
+        ))
+        .id();
+    let mut children = Vec::new();
+    for _ in 0..3 {
+        children.push(app
+            .world_mut()
+            .spawn((
+                UiLayout::flow().width(Ab(100.0)).height(Ab(50.0)).pack(),
+                ChildOf(container),
+            ))
+            .id());
+    }
+
+    app.update();
+
+    // 700 leftover split between two gaps: first at 0, middle at 450, last at 900.
+    let t0 = translation_of(&app, children[0]);
+    let t1 = translation_of(&app, children[1]);
+    let t2 = translation_of(&app, children[2]);
+    assert!((t0.x - (-450.0)).abs() <= 0.1, "first: {t0}");
+    assert!(t1.x.abs() <= 0.1, "middle: {t1}");
+    assert!((t2.x - 450.0).abs() <= 0.1, "last: {t2}");
+}
+
+#[test]
+fn flow_margin_participates_in_layout() {
+    let mut app = test_app();
+    let root = spawn_root(&mut app, Vec2::new(1000.0, 600.0));
+
+    let parent = app
+        .world_mut()
+        .spawn((
+            UiLayout::flow().gap(Ab(20.0)).pack(),
+            ChildOf(root),
+        ))
+        .id();
+    let a = app
+        .world_mut()
+        .spawn((
+            UiLayout::flow().margin_x(Ab(10.0)).width(Ab(100.0)).height(Ab(50.0)).pack(),
+            ChildOf(parent),
+        ))
+        .id();
+    let b = app
+        .world_mut()
+        .spawn((
+            UiLayout::flow().width(Ab(100.0)).height(Ab(50.0)).pack(),
+            ChildOf(parent),
+        ))
+        .id();
+
+    app.update();
+
+    // The Fit parent hugs both children including margins and gap:
+    // 10 + 100 + 10 + 20 + 100 = 240 wide, 50 tall.
+    assert_vec2(dimension_of(&app, parent), Vec2::new(240.0, 50.0));
+    // `a` starts at its left margin, `b` sits after `a`'s right margin plus the gap.
+    let a_t = translation_of(&app, a);
+    let b_t = translation_of(&app, b);
+    // `a` spans [10, 110] within the 240-wide parent, `b` spans [140, 240].
+    assert!((a_t.x - (-60.0)).abs() <= 0.1, "a: {a_t}");
+    assert!((b_t.x - 70.0).abs() <= 0.1, "b: {b_t}");
+}
+
+#[test]
+fn flow_right_to_left_direction() {
+    let mut app = test_app();
+    let root = spawn_root(&mut app, Vec2::new(1000.0, 600.0));
+
+    let container = app
+        .world_mut()
+        .spawn((
+            UiLayout::flow().width(Ab(1000.0)).height(Ab(100.0)).direction(UiFlowDirection::RightToLeft).pack(),
+            ChildOf(root),
+        ))
+        .id();
+    let first = app
+        .world_mut()
+        .spawn((
+            UiLayout::flow().width(Ab(100.0)).height(Ab(50.0)).pack(),
+            ChildOf(container),
+        ))
+        .id();
+    let second = app
+        .world_mut()
+        .spawn((
+            UiLayout::flow().width(Ab(100.0)).height(Ab(50.0)).pack(),
+            ChildOf(container),
+        ))
+        .id();
+
+    app.update();
+
+    // The first child sits at the right edge, the second to its left.
+    let first_t = translation_of(&app, first);
+    let second_t = translation_of(&app, second);
+    assert!((first_t.x - 450.0).abs() <= 0.1, "first: {first_t}");
+    assert!((second_t.x - 350.0).abs() <= 0.1, "second: {second_t}");
+}
+
+#[test]
+fn flow_align_end_pushes_children_down() {
+    let mut app = test_app();
+    let root = spawn_root(&mut app, Vec2::new(1000.0, 600.0));
+
+    let container = app
+        .world_mut()
+        .spawn((
+            UiLayout::flow().width(Ab(400.0)).height(Ab(100.0)).align(Align::END).pack(),
+            ChildOf(root),
+        ))
+        .id();
+    let child = app
+        .world_mut()
+        .spawn((
+            UiLayout::flow().width(Ab(100.0)).height(Ab(50.0)).pack(),
+            ChildOf(container),
+        ))
+        .id();
+
+    app.update();
+
+    // `align: END` injects `margin_top: 1sp` - the child sits at the bottom of the container.
+    // Child spans y [50, 100] top-down -> 25px below the container center in bevy's y-up space.
+    let child_t = translation_of(&app, child);
+    assert!((child_t.y - (-25.0)).abs() <= 0.1, "child: {child_t}");
+}
+
+#[test]
+fn flow_wrap_packs_lines() {
+    let mut app = test_app();
+    let root = spawn_root(&mut app, Vec2::new(1000.0, 600.0));
+
+    let container = app
+        .world_mut()
+        .spawn((
+            UiLayout::flow().width(Ab(250.0)).wrapping().gap(Ab(10.0)).pack(),
+            ChildOf(root),
+        ))
+        .id();
+    let mut items = Vec::new();
+    for _ in 0..3 {
+        items.push(
+            app.world_mut()
+                .spawn((
+                    UiLayout::flow().width(Ab(100.0)).height(Ab(50.0)).pack(),
+                    ChildOf(container),
+                ))
+                .id(),
+        );
+    }
+
+    app.update();
+
+    // 100 + 10 + 100 fits, the third item wraps to the second line.
+    assert_vec2(dimension_of(&app, container), Vec2::new(250.0, 110.0));
+    assert_vec2(dimension_of(&app, items[2]), Vec2::new(100.0, 50.0));
+
+    // First item spans x [0, 100] -> its center is 75px left of the container's center (125).
+    let first_t = translation_of(&app, items[0]);
+    assert!((first_t.x - (-75.0)).abs() <= 0.1, "first: {first_t}");
+    // Second item at x [110, 210] -> center 160 -> 35px right of the container center.
+    let second_t = translation_of(&app, items[1]);
+    assert!((second_t.x - 35.0).abs() <= 0.1, "second: {second_t}");
+    // Third item at y [60, 110] -> center 85 -> 30px below the container center (y-up flip).
+    let third_t = translation_of(&app, items[2]);
+    assert!((third_t.y - (-30.0)).abs() <= 0.1, "third: {third_t}");
+    assert!((third_t.x - (-75.0)).abs() <= 0.1, "third: {third_t}");
+}
+
+#[test]
+fn flow_grid_tracks_and_lines() {
+    let mut app = test_app();
+    let root = spawn_root(&mut app, Vec2::new(1000.0, 600.0));
+
+    let container = app
+        .world_mut()
+        .spawn((
+            UiLayout::flow()
+                .width(Ab(400.0))
+                .gap(Ab(10.0))
+                .grid([UiFlowSize::Grow, UiFlowSize::Grow])
+                .pack(),
+            ChildOf(root),
+        ))
+        .id();
+    let mut items = Vec::new();
+    for _ in 0..5 {
+        items.push(
+            app.world_mut()
+                .spawn((
+                    UiLayout::flow().width(Ab(50.0)).height(Ab(50.0)).pack(),
+                    ChildOf(container),
+                ))
+                .id(),
+        );
+    }
+
+    app.update();
+
+    // Two 195-wide grow tracks per line; the fifth item's lone track takes the whole row.
+    assert_vec2(dimension_of(&app, container), Vec2::new(400.0, 170.0));
+    assert_vec2(dimension_of(&app, items[0]), Vec2::new(195.0, 50.0));
+    assert_vec2(dimension_of(&app, items[4]), Vec2::new(400.0, 50.0));
+
+    // Second item starts after the first track: x [205, 400] -> center 302.5 -> 102.5px
+    // right of the container center (200).
+    let second_t = translation_of(&app, items[1]);
+    assert!((second_t.x - 102.5).abs() <= 0.1, "second: {second_t}");
+    // Third item starts the second line: x [0, 195] -> center 97.5 -> 102.5px left of the
+    // container center (200); y [60, 110] -> center 85 = the container's center (85).
+    let third_t = translation_of(&app, items[2]);
+    assert!((third_t.y - 0.0).abs() <= 0.1, "third: {third_t}");
+    assert!((third_t.x - (-102.5)).abs() <= 0.1, "third: {third_t}");
 }

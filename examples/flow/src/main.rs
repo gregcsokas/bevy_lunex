@@ -48,7 +48,8 @@ fn setup(mut commands: Commands) {
                 Name::new("Header"),
                 UiLayout::flow()
                     .padding_all(Ab(16.0))
-                    .align_x(Align::CENTER)
+                    .justify(UiJustify::Center)
+                    .align(Align::CENTER)
                     .pack(),
                 Sprite::from_color(Color::srgb(0.85, 0.55, 0.15), Vec2::ONE),
             ))

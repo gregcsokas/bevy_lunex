@@ -1,0 +1,16 @@
+#====================#
+#=== EXAMPLE INFO ===#
+
+[package]
+  authors.workspace = true
+  edition.workspace = true
+  name              = "flow_showcase"
+  publish           = false
+  version.workspace = true
+
+  #===============================#
+  #=== DEPENDENCIES & FEATURES ===#
+
+[dependencies]
+  bevy       = { version = "0.19", default-features = true }
+  bevy_lunex = { workspace = true }

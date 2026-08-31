@@ -10,6 +10,7 @@ pub mod prelude {
         UiFlowSize,
         UiFlowAxis,
         UiFlowPadding,
+        UiJustify,
         UiLayoutTypeFlow,
     };
 }
@@ -127,14 +128,25 @@ pub enum Scaling {
 /// ```
 /// # use bevy_lunex::*;
 /// let direction: UiFlowDirection = UiFlowDirection::TopToBottom; // -> stack children vertically
+/// let direction: UiFlowDirection = UiFlowDirection::RightToLeft;  // -> inverted horizontal stack
 /// ```
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Reflect)]
 pub enum UiFlowDirection {
     /// Children are laid out from left to right with increasing x.
     #[default]
     LeftToRight,
+    /// Children are laid out from right to left with decreasing x (inverted).
+    RightToLeft,
     /// Children are laid out from top to bottom with increasing y.
     TopToBottom,
+    /// Children are laid out from bottom to top with decreasing y (inverted).
+    BottomToTop,
+}
+impl UiFlowDirection {
+    /// Returns `true` when the layout direction runs along the horizontal axis.
+    pub const fn is_horizontal(&self) -> bool {
+        matches!(self, UiFlowDirection::LeftToRight | UiFlowDirection::RightToLeft)
+    }
 }
 
 /// **Ui Flow Size** - A type used to define how a flow node takes up space inside its parent's flow.
@@ -142,22 +154,26 @@ pub enum UiFlowDirection {
 /// ```
 /// # use bevy_lunex::*;
 /// let size: UiFlowSize = UiFlowSize::Fit;                          // -> hug the content
-/// let size: UiFlowSize = UiFlowSize::Grow;                        // -> fill available space
+/// let size: UiFlowSize = UiFlowSize::Grow;                        // -> claim 1 share of leftover space
 /// let size: UiFlowSize = UiFlowSize::Fixed(Ab(50.0).into());      // -> exactly 50px
 /// let size: UiFlowSize = UiFlowSize::Fixed(Rl(50.0).into());      // -> 50% of the parent's inner size
+/// let size: UiFlowSize = UiFlowSize::Fixed(Sp(1.0).into());      // -> flexible, claims 1 share
 /// ```
 ///
 /// Sizing with relative units ( [`Rl`], [`Rw`], [`Rh`] ) behaves like a percent of the parent's
 /// inner content box and is resolved once the parent's size is known. Such nodes do not
-/// contribute to the parent's content-hugging size.
+/// contribute to the parent's content-hugging size. Sizing with the [`Sp`] unit claims a
+/// proportional share of the parent's leftover space (after all fixed content and margins),
+/// distributed among all `Sp` claims of the siblings: `50px + 1sp` sizes the node to `50px`
+/// plus one weighted share of the leftover, and `3sp` vs `1sp` siblings split it `3:1`.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Reflect)]
 pub enum UiFlowSize {
     /// The node wraps tightly to the size of its contents.
     #[default]
     Fit,
-    /// The node expands along this axis to fill available space in the parent, sharing it with other `Grow` nodes.
+    /// The node claims one share ([`Sp`]`(1.0)`) of the parent's leftover space on top of its content.
     Grow,
-    /// The node is sized by an explicit [`UiValue`].
+    /// The node is sized by an explicit [`UiValue`]. Any [`Sp`] component acts as a leftover-space claim.
     Fixed(UiValue<f32>),
 }
 /// Conversions
@@ -183,7 +199,7 @@ macro_rules! impl_flow_size_from_unit {
         )*
     };
 }
-impl_flow_size_from_unit!(Ab, Rl, Rw, Rh, Em, Vp, Vw, Vh);
+impl_flow_size_from_unit!(Ab, Rl, Rw, Rh, Em, Vp, Vw, Vh, Sp);
 
 /// **Ui Flow Axis** - A type used to define the sizing of one axis of a [`UiLayoutTypeFlow`] node.
 /// ## 🛠️ Example
@@ -226,10 +242,13 @@ impl From<UiFlowSize> for UiFlowAxis {
 
 /// **Ui Flow Padding** - A type used to define the padding of a [`UiLayoutTypeFlow`] node.
 /// Padding is a gap between the bounding box of the node and where its children are placed.
+/// The same type is also used for flow margins (spacing around a node within its parent's flow),
+/// where [`Sp`] units claim shares of the parent's leftover space.
 /// ## 🛠️ Example
 /// ```
 /// # use bevy_lunex::*;
 /// let padding: UiFlowPadding = UiFlowPadding::x(Ab(16.0));
+/// let margin: UiFlowPadding = UiFlowPadding::bottom(Sp(1.0));
 /// ```
 #[derive(Debug, Default, Clone, Copy, PartialEq, Reflect)]
 pub struct UiFlowPadding {
@@ -244,6 +263,10 @@ pub struct UiFlowPadding {
 }
 /// Constructors
 impl UiFlowPadding {
+    /// Returns `true` if no side carries any unit.
+    pub fn is_empty(&self) -> bool {
+        self.left == UiValue::new() && self.right == UiValue::new() && self.top == UiValue::new() && self.bottom == UiValue::new()
+    }
     /// Creates padding with the same value on all sides.
     pub fn all(value: impl Into<UiValue<f32>>) -> Self {
         let value = value.into();
@@ -259,11 +282,64 @@ impl UiFlowPadding {
         let value = value.into();
         Self { top: value, bottom: value, ..Default::default() }
     }
+    /// Creates padding on the left side only.
+    pub fn left(value: impl Into<UiValue<f32>>) -> Self {
+        Self { left: value.into(), ..Default::default() }
+    }
+    /// Creates padding on the right side only.
+    pub fn right(value: impl Into<UiValue<f32>>) -> Self {
+        Self { right: value.into(), ..Default::default() }
+    }
+    /// Creates padding on the top side only.
+    pub fn top(value: impl Into<UiValue<f32>>) -> Self {
+        Self { top: value.into(), ..Default::default() }
+    }
+    /// Creates padding on the bottom side only.
+    pub fn bottom(value: impl Into<UiValue<f32>>) -> Self {
+        Self { bottom: value.into(), ..Default::default() }
+    }
+}
+
+/// **Ui Justify** - Defines how child nodes are spaced along the main axis (the layout direction)
+/// of a [`UiLayoutTypeFlow`] container. Each mode expands into default [`Sp`] margins inherited
+/// by the children (overridable per child); the leftover space is shared proportionally between
+/// all `Sp` claims.
+/// ## 🛠️ Example
+/// ```
+/// # use bevy_lunex::*;
+/// let layout: UiLayout = UiLayout::flow().justify(UiJustify::SpaceBetween).pack();
+/// ```
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Reflect)]
+pub enum UiJustify {
+    /// Children are packed at the start of the main axis; the leftover space stays after the last child.
+    #[default]
+    Start,
+    /// Children are packed at the center of the main axis; the leftover space splits evenly on both sides.
+    Center,
+    /// Children are packed at the end of the main axis; the leftover space stays before the first child.
+    End,
+    /// First and last children pin to the outer edges; the leftover space is distributed between children.
+    SpaceBetween,
+    /// Equal leftover space before, between and after all children.
+    SpaceEvenly,
+    /// Equal leftover space on both sides of each child (edges get half of the between-item space).
+    SpaceAround,
+}
+impl UiJustify {
+    /// Approximate placement factor of the packed block along the main axis for a single node
+    /// (`0.0` = start, `1.0` = end). Used by the standalone compute fallback.
+    pub const fn factor(&self) -> f32 {
+        match self {
+            UiJustify::Start | UiJustify::SpaceBetween => 0.0,
+            UiJustify::Center | UiJustify::SpaceEvenly | UiJustify::SpaceAround => 0.5,
+            UiJustify::End => 1.0,
+        }
+    }
 }
 
 /// **Flow** - Dynamic layout type that participates in the ui flow. It is defined by how it takes
 /// up space inside its parent's flow ([`UiFlowSize`]) and by how its children are arranged
-/// ([`UiFlowDirection`], gap, padding, alignment). This is a flexbox-like layout model.
+/// ([`UiFlowDirection`], gap, padding, margin, alignment). This is a flexbox-like layout model.
 ///
 /// Nodes with this layout **are included in the ui flow** of their parent (if the parent also
 /// uses a flow layout). Nodes with [`UiLayoutType::Boundary`], [`UiLayoutType::Window`] or
@@ -271,24 +347,38 @@ impl UiFlowPadding {
 ///
 /// ## Sizing semantics
 /// - [`UiFlowSize::Fit`] - The node hugs its content (text, image or children).
-/// - [`UiFlowSize::Grow`] - The node fills the available space, sharing it with other `Grow` siblings.
+/// - [`UiFlowSize::Grow`] - The node claims one [`Sp`] share of the parent's leftover space on
+///   top of its content, distributed proportionally to sibling claims.
 /// - [`UiFlowSize::Fixed`] - The node is sized explicitly. Relative units ([`Rl`], [`Rw`], [`Rh`])
 ///   resolve against the parent's inner content box (minus padding and gaps) and behave like
 ///   percentages. They do not contribute to a `Fit` parent's content-hugging size.
+///   [`Sp`] components act as leftover-space claims (flex-grow).
+///
+/// ## Spacing semantics
+/// All child alignment is done through [`Sp`] margins: the container's `align` and `justify`
+/// settings expand into **default margins inherited by the children** (each child can override
+/// any side with its own `margin`). The parent's leftover space is then shared proportionally
+/// between all `Sp` margins and `Sp` sizing claims of the children. With no leftover space,
+/// all `Sp` values resolve to `0`.
+/// - `align: START` → children inherit `margin_bottom: 1sp` (cross-axis top alignment)
+/// - `align: CENTER` → children inherit `0.5sp` on both cross-axis sides
+/// - `justify: SpaceBetween` → all children except the first inherit `margin_left: 1sp`
+///   (or `margin_top` in vertical layouts), pinning the first and last child to the edges.
 ///
 /// ## 🛠️ Example
 /// ```
-/// # use bevy_lunex::{UiLayout, UiFlowSize, UiFlowDirection, Ab, Rl, Align};
+/// # use bevy_lunex::{UiLayout, UiFlowSize, UiFlowDirection, UiJustify, Ab, Rl, Align};
 /// let layout: UiLayout = UiLayout::flow()
 ///     .direction(UiFlowDirection::TopToBottom)
 ///     .gap(Ab(8.0))
 ///     .padding_all(Ab(16.0))
 ///     .width(UiFlowSize::Grow)
 ///     .height(UiFlowSize::Fit)
-///     .align_x(Align::CENTER)
+///     .align(Align::CENTER)
+///     .justify(UiJustify::SpaceBetween)
 ///     .pack();
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Reflect)]
+#[derive(Debug, Clone, PartialEq, Reflect)]
 pub struct UiLayoutTypeFlow {
     /// The direction in which child nodes are laid out.
     pub direction: UiFlowDirection,
@@ -298,12 +388,34 @@ pub struct UiLayoutTypeFlow {
     pub height: UiFlowAxis,
     /// The gap between the node's bounding box and its children.
     pub padding: UiFlowPadding,
-    /// The gap between child nodes along the layout direction.
+    /// The spacing around the node within its parent's flow. [`Sp`] components claim shares of
+    /// the parent's leftover space. Each side falls back to the parent's `align`/`justify`
+    /// default margins when not defined.
+    pub margin: UiFlowPadding,
+    /// The gap between child nodes along the layout direction. When wrapping is enabled,
+    /// it also applies between the wrapped lines.
     pub gap: UiValue<f32>,
-    /// The alignment of children along the horizontal axis.
-    pub align_x: Align,
-    /// The alignment of children along the vertical axis.
-    pub align_y: Align,
+    /// The alignment of children along the cross axis (perpendicular to the direction).
+    /// Expands into default `Sp` margins inherited by the children.
+    pub align: Align,
+    /// The justification of children along the main axis (the layout direction).
+    /// Expands into default `Sp` margins inherited by the children.
+    pub justify: UiJustify,
+    /// Whether children wrap onto new lines when they overflow the main axis. Requires the
+    /// node's main-axis sizing to not be `Fit` (line breaking needs a known extent).
+    pub wrap: bool,
+    /// Reverses the stacking direction of wrapped lines (lines grow from the opposite side).
+    /// Has no effect when wrapping is disabled.
+    pub flipped: bool,
+    /// Grid track definitions along the main axis (columns for horizontal layouts, rows for
+    /// vertical ones). An empty vector disables grid mode. Each track is sized like a flow
+    /// node: `Fit` hugs its largest item, `Fixed` is explicit and `Sp`/`Grow` claim shares of
+    /// the line's leftover space.
+    pub grid: Vec<UiFlowSize>,
+    /// Whether grid items wrap onto further lines after the last track. With `false`, all
+    /// items stay on the first line and items beyond the defined tracks get implicit
+    /// auto-sized tracks.
+    pub grid_wrap: bool,
 }
 impl Default for UiLayoutTypeFlow {
     fn default() -> Self {
@@ -313,15 +425,20 @@ impl Default for UiLayoutTypeFlow {
 /// Constructors
 impl UiLayoutTypeFlow {
     /// Creates new empty Flow node layout.
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             direction: UiFlowDirection::LeftToRight,
             width: UiFlowAxis::new(UiFlowSize::Fit),
             height: UiFlowAxis::new(UiFlowSize::Fit),
             padding: UiFlowPadding { left: UiValue::new(), right: UiValue::new(), top: UiValue::new(), bottom: UiValue::new() },
+            margin: UiFlowPadding { left: UiValue::new(), right: UiValue::new(), top: UiValue::new(), bottom: UiValue::new() },
             gap: UiValue::new(),
-            align_x: Align::START,
-            align_y: Align::START,
+            align: Align::START,
+            justify: UiJustify::Start,
+            wrap: false,
+            flipped: false,
+            grid: Vec::new(),
+            grid_wrap: true,
         }
     }
     /// Replaces the direction with a new value.
@@ -379,14 +496,93 @@ impl UiLayoutTypeFlow {
         self.padding = UiFlowPadding::y(padding);
         self
     }
-    /// Replaces the horizontal alignment with a new value.
-    pub fn align_x(mut self, align: impl Into<Align>) -> Self {
-        self.align_x = align.into();
+    /// Replaces the padding with a new value on the left side.
+    pub fn padding_left(mut self, padding: impl Into<UiValue<f32>>) -> Self {
+        self.padding.left = padding.into();
         self
     }
-    /// Replaces the vertical alignment with a new value.
-    pub fn align_y(mut self, align: impl Into<Align>) -> Self {
-        self.align_y = align.into();
+    /// Replaces the padding with a new value on the right side.
+    pub fn padding_right(mut self, padding: impl Into<UiValue<f32>>) -> Self {
+        self.padding.right = padding.into();
+        self
+    }
+    /// Replaces the padding with a new value on the top side.
+    pub fn padding_top(mut self, padding: impl Into<UiValue<f32>>) -> Self {
+        self.padding.top = padding.into();
+        self
+    }
+    /// Replaces the padding with a new value on the bottom side.
+    pub fn padding_bottom(mut self, padding: impl Into<UiValue<f32>>) -> Self {
+        self.padding.bottom = padding.into();
+        self
+    }
+    /// Replaces the margin with a new value on all sides.
+    pub fn margin_all(mut self, margin: impl Into<UiValue<f32>>) -> Self {
+        self.margin = UiFlowPadding::all(margin);
+        self
+    }
+    /// Replaces the margin with a new value on the horizontal axis.
+    pub fn margin_x(mut self, margin: impl Into<UiValue<f32>>) -> Self {
+        self.margin = UiFlowPadding::x(margin);
+        self
+    }
+    /// Replaces the margin with a new value on the vertical axis.
+    pub fn margin_y(mut self, margin: impl Into<UiValue<f32>>) -> Self {
+        self.margin = UiFlowPadding::y(margin);
+        self
+    }
+    /// Replaces the margin with a new value on the left side.
+    pub fn margin_left(mut self, margin: impl Into<UiValue<f32>>) -> Self {
+        self.margin.left = margin.into();
+        self
+    }
+    /// Replaces the margin with a new value on the right side.
+    pub fn margin_right(mut self, margin: impl Into<UiValue<f32>>) -> Self {
+        self.margin.right = margin.into();
+        self
+    }
+    /// Replaces the margin with a new value on the top side.
+    pub fn margin_top(mut self, margin: impl Into<UiValue<f32>>) -> Self {
+        self.margin.top = margin.into();
+        self
+    }
+    /// Replaces the margin with a new value on the bottom side.
+    pub fn margin_bottom(mut self, margin: impl Into<UiValue<f32>>) -> Self {
+        self.margin.bottom = margin.into();
+        self
+    }
+    /// Replaces the cross-axis alignment with a new value. Expands into default
+    /// `Sp` margins inherited by the children unless they define their own.
+    pub fn align(mut self, align: impl Into<Align>) -> Self {
+        self.align = align.into();
+        self
+    }
+    /// Replaces the main-axis justification with a new value. Expands into default
+    /// `Sp` margins inherited by the children unless they define their own.
+    pub const fn justify(mut self, justify: UiJustify) -> Self {
+        self.justify = justify;
+        self
+    }
+    /// Enables line wrapping of children along the main axis.
+    pub const fn wrapping(mut self) -> Self {
+        self.wrap = true;
+        self
+    }
+    /// Reverses the stacking direction of wrapped lines.
+    pub const fn flipped(mut self) -> Self {
+        self.flipped = true;
+        self
+    }
+    /// Defines grid tracks along the main axis, one per item in the slice, and enables
+    /// wrapping onto further lines after the last track.
+    pub fn grid(mut self, tracks: impl Into<Vec<UiFlowSize>>) -> Self {
+        self.grid = tracks.into();
+        self.wrap = !self.grid.is_empty();
+        self
+    }
+    /// Replaces whether grid items wrap onto further lines after the last track.
+    pub const fn grid_wrap(mut self, grid_wrap: bool) -> Self {
+        self.grid_wrap = grid_wrap;
         self
     }
     /// Pack the layout type into UiLayout
@@ -419,10 +615,15 @@ impl UiLayoutTypeFlow {
         if let Some(v) = self.height.min { size.y = size.y.max(v.evaluate_axis(absolute_scale, parent.size, viewport_size, font_size, 1)) }
         if let Some(v) = self.height.max { size.y = size.y.min(v.evaluate_axis(absolute_scale, parent.size, viewport_size, font_size, 1)) }
 
-        // Align within parent (top-left relative)
+        // Align within parent (top-left relative). The main axis uses the justify placement
+        // factor, the cross axis uses the align factor (approximation of the margin-template
+        // semantics for a single node inside the parent box).
+        let main = self.justify.factor();
+        let cross = (self.align.0 + 1.0) / 2.0;
+        let horizontal = self.direction.is_horizontal();
         let pos = Vec2::new(
-            (parent.size.x - size.x) * (self.align_x.0 + 1.0) / 2.0,
-            (parent.size.y - size.y) * (self.align_y.0 + 1.0) / 2.0,
+            (parent.size.x - size.x) * if horizontal { main } else { cross },
+            (parent.size.y - size.y) * if horizontal { cross } else { main },
         );
         Rectangle2D {
             pos: -parent.size / 2.0 + pos + size / 2.0,
@@ -437,9 +638,9 @@ impl UiLayoutTypeFlow {
 
 /// **Ui Layout Type** - Enum holding all UI layout variants.
 /// The `Flow` variant is several times larger than the others because it carries
-/// a full set of `UiValue` parameters; the enum stays `Copy` for API ergonomics.
+/// a full set of `UiValue` parameters; the enum stays `Clone` for API ergonomics.
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug, Clone, Copy, PartialEq, Reflect)]
+#[derive(Debug, Clone, PartialEq, Reflect)]
 pub enum UiLayoutType {
     Boundary(UiLayoutTypeBoundary),
     Window(UiLayoutTypeWindow),

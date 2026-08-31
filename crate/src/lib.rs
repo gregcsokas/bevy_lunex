@@ -401,7 +401,7 @@ pub fn system_debug_print_data(
                             UiFlowSize::Grow => "Grow".green().to_string(),
                             UiFlowSize::Fixed(v) => v.to_nicestr(),
                         };
-                        output_string += &format!(" ➜ {} {} dir: {:?}, w: {}, h: {}, gap: {}, pad: ({}, {}, {}, {}) {}",
+                        output_string += &format!(" ➜ {} {} dir: {:?}, w: {}, h: {}, gap: {}, pad: ({}, {}, {}, {}), align: {:?}, justify: {:?} {}",
                             "Flow".bold(),
                             "{",
                             flow.direction,
@@ -412,6 +412,8 @@ pub fn system_debug_print_data(
                             flow.padding.top.to_nicestr(),
                             flow.padding.right.to_nicestr(),
                             flow.padding.bottom.to_nicestr(),
+                            flow.align.0,
+                            flow.justify,
                             "}",
                         );
                     },
@@ -507,13 +509,14 @@ impl UiLayout {
     /// takes up space inside its parent's flow and by how its children are arranged.
     /// ## 🛠️ Example
     /// ```
-    /// # use bevy_lunex::{UiLayout, UiFlowSize, UiFlowDirection, Ab, Rl, Align};
+    /// # use bevy_lunex::{UiLayout, UiFlowSize, UiFlowDirection, UiJustify, Ab, Rl, Align};
     /// let layout: UiLayout = UiLayout::flow()
     ///     .direction(UiFlowDirection::TopToBottom)
     ///     .gap(Ab(8.0))
     ///     .width(UiFlowSize::Grow)
     ///     .height(Rl(50.0))
-    ///     .align_x(Align::CENTER)
+    ///     .align(Align::CENTER)
+    ///     .justify(UiJustify::SpaceBetween)
     ///     .pack();
     /// ```
     pub fn flow() -> UiLayoutTypeFlow {

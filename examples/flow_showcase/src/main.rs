@@ -1,0 +1,205 @@
+//! A showcase of the flow layout model: stack ordering, the `Sp` space unit,
+//! justification/alignment margins, line wrapping and grid tracks.
+
+use bevy::prelude::*;
+use bevy_lunex::prelude::*;
+
+fn main() -> AppExit {
+    App::new()
+        .add_plugins((DefaultPlugins, UiLunexPlugins, UiLunexDebugPlugin::<0, 0>))
+        .add_systems(Startup, setup)
+        .run()
+}
+
+fn setup(mut commands: Commands) {
+    commands.spawn((
+        Camera2d, UiSourceCamera::<0>,
+        Transform::from_translation(Vec3::Z * 1000.0),
+    ));
+
+    // The UI root acts as an implicit left-to-right flow container, so the
+    // three showcase columns split the window width evenly.
+    commands.spawn((
+        Name::new("Root"),
+        UiLayoutRoot::new_2d(),
+        UiFetchFromCamera::<0>,
+    ))
+    .with_children(|ui| {
+        ordering_panel(ui);
+        justify_panel(ui);
+        wrap_grid_panel(ui);
+    });
+}
+
+/// Spawns a dark panel filling its share of the window and runs the children spawner inside.
+fn panel(ui: &mut ChildSpawnerCommands, name: &str, spawn_children: impl FnOnce(&mut ChildSpawnerCommands)) {
+    ui.spawn((
+        Name::new(name.to_string()),
+        UiLayout::flow()
+            .direction(UiFlowDirection::TopToBottom)
+            .gap(Ab(8.0))
+            .padding_all(Ab(12.0))
+            .width(UiFlowSize::Grow)
+            .height(UiFlowSize::Grow)
+            .pack(),
+        Sprite::from_color(Color::srgb(0.09, 0.10, 0.13), Vec2::ONE),
+    ))
+    .with_children(spawn_children);
+}
+
+fn palette(i: usize) -> Color {
+    const PALETTE: [Color; 4] = [
+        Color::srgb(0.85, 0.35, 0.35),
+        Color::srgb(0.90, 0.65, 0.25),
+        Color::srgb(0.40, 0.75, 0.45),
+        Color::srgb(0.35, 0.60, 0.90),
+    ];
+    PALETTE[i % PALETTE.len()]
+}
+
+/// Panel 1: the four stack orderings.
+fn ordering_panel(ui: &mut ChildSpawnerCommands) {
+    panel(ui, "Ordering", |panel| {
+        let orderings = [
+            (UiFlowDirection::LeftToRight, "LTR"),
+            (UiFlowDirection::RightToLeft, "RTL"),
+            (UiFlowDirection::TopToBottom, "TTB"),
+            (UiFlowDirection::BottomToTop, "BTT"),
+        ];
+        for (direction, name) in orderings {
+            panel.spawn((
+                Name::new(name.to_string()),
+                UiLayout::flow()
+                    .direction(direction)
+                    .gap(Ab(6.0))
+                    .padding_all(Ab(8.0))
+                    .width(UiFlowSize::Grow)
+                    .height(UiFlowSize::Grow)
+                    .pack(),
+                Sprite::from_color(Color::srgb(0.15, 0.17, 0.22), Vec2::ONE),
+            ))
+            .with_children(|row| {
+                for i in 0..4 {
+                    row.spawn((
+                        Name::new(format!("{name} {i}")),
+                        UiLayout::flow().width(Ab(56.0)).height(Ab(24.0)).pack(),
+                        Sprite::from_color(palette(i), Vec2::ONE),
+                    ));
+                }
+            });
+        }
+    });
+}
+
+/// Panel 2: justification modes - all of them are injected `Sp` margins.
+fn justify_panel(ui: &mut ChildSpawnerCommands) {
+    panel(ui, "Justify", |panel| {
+        let modes = [
+            (UiJustify::Start, "Start"),
+            (UiJustify::Center, "Center"),
+            (UiJustify::End, "End"),
+            (UiJustify::SpaceBetween, "Between"),
+            (UiJustify::SpaceEvenly, "Evenly"),
+            (UiJustify::SpaceAround, "Around"),
+        ];
+        for (justify, name) in modes {
+            panel.spawn((
+                Name::new(name.to_string()),
+                UiLayout::flow()
+                    .justify(justify)
+                    .align(Align::CENTER)
+                    .gap(Ab(6.0))
+                    .padding_all(Ab(8.0))
+                    .width(UiFlowSize::Grow)
+                    .height(UiFlowSize::Grow)
+                    .pack(),
+                Sprite::from_color(Color::srgb(0.15, 0.17, 0.22), Vec2::ONE),
+            ))
+            .with_children(|row| {
+                for i in 0..3 {
+                    row.spawn((
+                        Name::new(format!("{name} {i}")),
+                        UiLayout::flow().width(Ab(64.0)).height(Ab(24.0)).pack(),
+                        Sprite::from_color(palette(i), Vec2::ONE),
+                    ));
+                }
+            });
+        }
+    });
+}
+
+/// Panel 3: line wrapping (plain and flipped) and grid tracks.
+fn wrap_grid_panel(ui: &mut ChildSpawnerCommands) {
+    panel(ui, "Wrap & Grid", |panel| {
+        // === Wrapping: items flow onto new lines when the width runs out. ===
+        panel.spawn((
+            Name::new("Wrap"),
+            UiLayout::flow()
+                .wrapping()
+                .align(Align::END)
+                .gap(Ab(6.0))
+                .padding_all(Ab(8.0))
+                .width(UiFlowSize::Grow)
+                .pack(),
+            Sprite::from_color(Color::srgb(0.15, 0.17, 0.22), Vec2::ONE),
+        ))
+        .with_children(|wrap| {
+            for i in 0..7 {
+                wrap.spawn((
+                    Name::new(format!("Wrap {i}")),
+                    UiLayout::flow().width(Ab(64.0)).height(Ab(24.0)).pack(),
+                    Sprite::from_color(palette(i), Vec2::ONE),
+                ));
+            }
+        });
+
+        // === Flipped wrapping: the first line sits at the bottom edge. ===
+        panel.spawn((
+            Name::new("Wrap flipped"),
+            UiLayout::flow()
+                .wrapping()
+                .flipped()
+                .align(Align::END)
+                .gap(Ab(6.0))
+                .padding_all(Ab(8.0))
+                .width(UiFlowSize::Grow)
+                .height(Ab(116.0))
+                .pack(),
+            Sprite::from_color(Color::srgb(0.15, 0.17, 0.22), Vec2::ONE),
+        ))
+        .with_children(|wrap| {
+            for i in 0..7 {
+                wrap.spawn((
+                    Name::new(format!("Flipped {i}")),
+                    UiLayout::flow().width(Ab(64.0)).height(Ab(24.0)).pack(),
+                    Sprite::from_color(palette(i), Vec2::ONE),
+                ));
+            }
+        });
+
+        // === Grid: three track definitions, items fill their track. ===
+        panel.spawn((
+            Name::new("Grid"),
+            UiLayout::flow()
+                .gap(Ab(6.0))
+                .padding_all(Ab(8.0))
+                .width(UiFlowSize::Grow)
+                .grid([
+                    UiFlowSize::Fixed(Ab(48.0).into()),
+                    UiFlowSize::Grow,
+                    Sp(1.0).into(),
+                ])
+                .pack(),
+            Sprite::from_color(Color::srgb(0.15, 0.17, 0.22), Vec2::ONE),
+        ))
+        .with_children(|grid| {
+            for i in 0..7 {
+                grid.spawn((
+                    Name::new(format!("Cell {i}")),
+                    UiLayout::flow().height(Ab(28.0)).pack(),
+                    Sprite::from_color(palette(i), Vec2::ONE),
+                ));
+            }
+        });
+    });
+}

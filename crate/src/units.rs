@@ -95,6 +95,21 @@ pub struct Vw<T>(pub T);
 #[derive(Debug, Default, Clone, Copy, PartialEq, Deref, DerefMut, Reflect)]
 pub struct Vh<T>(pub T);
 
+/// **Space** - Represents a proportional share of the leftover space within a flow container.
+/// Unlike the other units, `Sp` is *flow-only*: it is resolved by the flow layout engine against
+/// the remaining (leftover) space of the parent, alongside all other `Sp` claims of the sibling
+/// nodes. When used in sizing (e.g. `width(50.0 + Sp(1.0))`) it acts as a flexible claim on the
+/// leftover space (like flex-grow); when used in margins it acts as proportional spacing.
+/// In any context that is not flow layout, or when there is no leftover space, `Sp` evaluates to `0`.
+/// ## 🛠️ Example
+/// ```
+/// # use bevy_lunex::*;
+/// let a: Sp<f32> = Sp(1.0) + Sp(2.0); // -> 3sp
+/// let b: Sp<f32> = Sp(1.0) * 3.0;     // -> 3sp
+/// ```
+#[derive(Debug, Default, Clone, Copy, PartialEq, Deref, DerefMut, Reflect)]
+pub struct Sp<T>(pub T);
+
 
 /// Implement basic math and conversions for a type
 macro_rules! init_unit {
@@ -170,7 +185,7 @@ macro_rules! init_unit {
         )*
     };
 }
-init_unit!(Ab, Rl, Rw, Rh, Em, Vp, Vw, Vh);
+init_unit!(Ab, Rl, Rw, Rh, Em, Vp, Vw, Vh, Sp);
 
 /// Implement basic math and conversions for a type
 macro_rules! impl_unit_operations {
@@ -210,7 +225,7 @@ macro_rules! impl_unit_operations {
         )*
     };
 }
-impl_unit_operations!(Ab, Rl, Rw, Rh, Em, Vp, Vw, Vh);
+impl_unit_operations!(Ab, Rl, Rw, Rh, Em, Vp, Vw, Vh, Sp);
 
 /// Implement adding two types together
 macro_rules! impl_unit_cross_operations {
@@ -300,6 +315,24 @@ impl_unit_cross_operations!((Vh, vh), (Em, em));
 impl_unit_cross_operations!((Vh, vh), (Vp, vp));
 impl_unit_cross_operations!((Vh, vh), (Vw, vw));
 
+impl_unit_cross_operations!((Sp, sp), (Ab, ab));
+impl_unit_cross_operations!((Sp, sp), (Rl, rl));
+impl_unit_cross_operations!((Sp, sp), (Rw, rw));
+impl_unit_cross_operations!((Sp, sp), (Rh, rh));
+impl_unit_cross_operations!((Sp, sp), (Em, em));
+impl_unit_cross_operations!((Sp, sp), (Vp, vp));
+impl_unit_cross_operations!((Sp, sp), (Vw, vw));
+impl_unit_cross_operations!((Sp, sp), (Vh, vh));
+
+impl_unit_cross_operations!((Ab, ab), (Sp, sp));
+impl_unit_cross_operations!((Rl, rl), (Sp, sp));
+impl_unit_cross_operations!((Rw, rw), (Sp, sp));
+impl_unit_cross_operations!((Rh, rh), (Sp, sp));
+impl_unit_cross_operations!((Em, em), (Sp, sp));
+impl_unit_cross_operations!((Vp, vp), (Sp, sp));
+impl_unit_cross_operations!((Vw, vw), (Sp, sp));
+impl_unit_cross_operations!((Vh, vh), (Sp, sp));
+
 
 // #================================#
 // #=== THE VALUE IMPLEMENTATION ===#
@@ -310,7 +343,7 @@ macro_rules! init_value {
         /// **Ui value** - A collection of different units used for UI.
         /// They are computed at runtime when layout is being calculated (context-aware).
         /// The supported units that implement `Into<UiValue>` are:
-        /// * [`Ab`] [`Rl`] [`Rw`] [`Rh`] [`Em`] [`Vw`] [`Vh`]
+        /// * [`Ab`] [`Rl`] [`Rw`] [`Rh`] [`Em`] [`Vw`] [`Vh`] [`Sp`]
         /// ## 📦 Types
         /// First class implementations for `(T)` are:
         /// * [`f32`] [`Vec2`] [`Vec3`] [`Vec4`]
@@ -429,7 +462,7 @@ macro_rules! init_value {
         }
     }
 }
-init_value!(ab, rl, rw, rh, em, vp, vw, vh);
+init_value!(ab, rl, rw, rh, em, vp, vw, vh, sp);
 
 /// Bind these structs to appropriate [`UiValue`] fields and implement math operations
 macro_rules! bind_value {
@@ -736,7 +769,7 @@ macro_rules! bind_value {
         }
     }
 }
-bind_value!((Ab, ab), (Rl, rl), (Rw, rw), (Rh, rh), (Em, em), (Vp, vp), (Vw, vw), (Vh, vh));
+bind_value!((Ab, ab), (Rl, rl), (Rw, rw), (Rh, rh), (Em, em), (Vp, vp), (Vw, vw), (Vh, vh), (Sp, sp));
 
 // # Impl flow-specific helpers on UiValue(f32)
 impl UiValue<f32> {
@@ -744,6 +777,8 @@ impl UiValue<f32> {
     /// Unlike [`UiValueEvaluate`], `Rl` resolves against the axis of the parent size
     /// (x for axis `0`, y for axis `1`) while `Rw`/`Rh` always resolve against their own axis.
     /// This is used by the flow layout engine where a scalar value is applied on a known axis.
+    /// The [`Sp`] unit is NOT resolved here (it evaluates to `0`) - it carries flow-space
+    /// information only the flow engine can resolve (leftover-space shares).
     pub fn evaluate_axis(&self, absolute_scale: f32, parent_size: Vec2, viewport_size: Vec2, font_size: f32, axis: usize) -> f32 {
         let mut out = 0.0;
         if let Some(v) = self.ab { out += v * absolute_scale }
@@ -760,6 +795,7 @@ impl UiValue<f32> {
     /// Evaluates only the units that are always resolvable ( [`Ab`], [`Em`], [`Vp`], [`Vw`], [`Vh`] ).
     /// Units relative to the parent ( [`Rl`], [`Rw`], [`Rh`] ) are dropped, which is useful
     /// when computing content-hugging sizes before the parent size is known.
+    /// The [`Sp`] unit is dropped as well (it depends on leftover space of the flow context).
     pub fn evaluate_intrinsic(&self, absolute_scale: f32, viewport_size: Vec2, font_size: f32, axis: usize) -> f32 {
         let mut out = 0.0;
         if let Some(v) = self.ab { out += v * absolute_scale }
@@ -767,6 +803,19 @@ impl UiValue<f32> {
         if let Some(v) = self.vp { out += (v/100.0) * if axis == 0 { viewport_size.x } else { viewport_size.y } }
         if let Some(v) = self.vw { out += (v/100.0) * viewport_size.x }
         if let Some(v) = self.vh { out += (v/100.0) * viewport_size.y }
+        out
+    }
+
+    /// Extracts the [`Sp`] (leftover-space share) weight carried by this value.
+    /// This is the flow-grow weight the flow engine uses when distributing leftover space.
+    pub fn sp_weight(&self) -> f32 {
+        self.sp.unwrap_or(0.0).max(0.0)
+    }
+
+    /// Creates a value that consists only of an [`Sp`] weight (a leftover-space share).
+    pub fn from_sp(weight: f32) -> Self {
+        let mut out = Self::new();
+        out.sp = Some(weight);
         out
     }
 
@@ -788,6 +837,7 @@ impl UiValue<f32> {
             vp: l(self.vp, other.vp),
             vw: l(self.vw, other.vw),
             vh: l(self.vh, other.vh),
+            sp: l(self.sp, other.sp),
         }
     }
 }
@@ -1004,6 +1054,10 @@ impl NiceDisplay for UiValue<f32> {
             if !t.is_empty() { t += " + " };
             t = format!("{}{}{}", t, format!("{v:.00}").bright_green(), "v%h".bright_green());
         }
+        if let Some(v) = self.sp && v != 0.0 {
+            if !t.is_empty() { t += " + " };
+            t = format!("{}{}{}", t, format!("{v:.00}").bright_yellow(), "sp".bright_yellow());
+        }
         if t.is_empty() { t = format!("{}", "0".bright_blue()); };
         format!("{}", t.black())
     }
@@ -1088,6 +1142,16 @@ impl NiceDisplay for UiValue<Vec2> {
             if v.y != 0.0 {
                 if !ty.is_empty() { ty += " + " };
                 ty = format!("{}{}{}", ty, format!("{:.00}", v.y).bright_green(), "v%h".bright_green());
+            }
+        }
+        if let Some(v) = self.sp {
+            if v.x != 0.0 {
+                if !tx.is_empty() { tx += " + " };
+                tx = format!("{}{}{}", tx, format!("{:.00}", v.x).bright_yellow(), "sp".bright_yellow());
+            }
+            if v.y != 0.0 {
+                if !ty.is_empty() { ty += " + " };
+                ty = format!("{}{}{}", ty, format!("{:.00}", v.y).bright_yellow(), "sp".bright_yellow());
             }
         }
         if tx.is_empty() { tx = format!("{}", "0".bright_blue()); };
@@ -1207,6 +1271,20 @@ impl NiceDisplay for UiValue<Vec3> {
             if v.z != 0.0 {
                 if !tz.is_empty() { tz += " + " };
                 tz = format!("{}{}{}", tz, format!("{:.00}", v.z).bright_green(), "v%h".bright_green());
+            }
+        }
+        if let Some(v) = self.sp {
+            if v.x != 0.0 {
+                if !tx.is_empty() { tx += " + " };
+                tx = format!("{}{}{}", tx, format!("{:.00}", v.x).bright_yellow(), "sp".bright_yellow());
+            }
+            if v.y != 0.0 {
+                if !ty.is_empty() { ty += " + " };
+                ty = format!("{}{}{}", ty, format!("{:.00}", v.y).bright_yellow(), "sp".bright_yellow());
+            }
+            if v.z != 0.0 {
+                if !tz.is_empty() { tz += " + " };
+                tz = format!("{}{}{}", tz, format!("{:.00}", v.z).bright_yellow(), "sp".bright_yellow());
             }
         }
         if tx.is_empty() { tx = format!("{}", "0".bright_blue()); };
@@ -1359,6 +1437,24 @@ impl NiceDisplay for UiValue<Vec4> {
             if v.w != 0.0 {
                 if !tw.is_empty() { tw += " + " };
                 tw = format!("{}{}{}", tw, format!("{:.00}", v.w).bright_green(), "v%h".bright_green());
+            }
+        }
+        if let Some(v) = self.sp {
+            if v.x != 0.0 {
+                if !tx.is_empty() { tx += " + " };
+                tx = format!("{}{}{}", tx, format!("{:.00}", v.x).bright_yellow(), "sp".bright_yellow());
+            }
+            if v.y != 0.0 {
+                if !ty.is_empty() { ty += " + " };
+                ty = format!("{}{}{}", ty, format!("{:.00}", v.y).bright_yellow(), "sp".bright_yellow());
+            }
+            if v.z != 0.0 {
+                if !tz.is_empty() { tz += " + " };
+                tz = format!("{}{}{}", tz, format!("{:.00}", v.z).bright_yellow(), "sp".bright_yellow());
+            }
+            if v.w != 0.0 {
+                if !tw.is_empty() { tw += " + " };
+                tw = format!("{}{}{}", tw, format!("{:.00}", v.w).bright_yellow(), "sp".bright_yellow());
             }
         }
         if tx.is_empty() { tx = format!("{}", "0".bright_blue()); };
