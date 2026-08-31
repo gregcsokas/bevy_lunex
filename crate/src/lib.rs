@@ -1174,8 +1174,13 @@ pub fn system_color(
             if let Some(mut mat) = materials2d.get_mut(id) {
                 mat.color = blend_color.into();
             }
-        } else if let Some(id) = mat3d && let Some(materials3d) = &mut materials3d && let Some(mut mat) = materials3d.get_mut(id) {
-            mat.base_color = blend_color.into();
+        } else if let Some(id) = mat3d && let Some(materials3d) = &mut materials3d {
+            let blend_color = blend_color.into();
+            if materials3d.get(id).is_some_and(|mat| mat.base_color != blend_color)
+                && let Some(mut mat) = materials3d.get_mut(id)
+            {
+                mat.base_color = blend_color;
+            }
         }
     }
 }
