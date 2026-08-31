@@ -2,7 +2,7 @@
 
 <div align="center">
   <a href="https://crates.io/crates/bevy_lunex"><img src="https://img.shields.io/crates/v/bevy_lunex?label=version&color=d69039"></a>
-  <a href="https://crates.io/crates/bevy"><img src="https://img.shields.io/badge/v0.18-white.svg?label=bevy&color=bb86a5"></a>
+  <a href="https://crates.io/crates/bevy"><img src="https://img.shields.io/badge/v0.19-white.svg?label=bevy&color=bb86a5"></a>
   <a href="./LICENSE-MIT"><img src="https://img.shields.io/badge/License-Apache/MIT-white.svg?label=license&color=9fcec4"></a>
   <a href="https://deps.rs/crate/bevy_lunex"><img src="https://img.shields.io/badge/check-white.svg?label=deps&color=a0f6b9"></a>
   <a href="https://docs.rs/bevy_lunex"><img src="https://img.shields.io/docsrs/bevy_lunex/latest?color=8df7cb"></a>
@@ -64,7 +64,7 @@ commands.spawn((
             // You can specify colors for multiple states
             UiColor::new(vec![
                 (UiBase::id(), Color::BEVYPUNK_RED.with_alpha(0.15)),
-                (UiHover::id(), Color::BEVYPUNK_YELLOW.with_alpha(1.2))
+                (UiHover::id(), Color::BEVYPUNK_YELLOW.with_alpha(1.0))
             ]),
             // You can attach any form of rendering to the node, be it sprite, mesh or something custom
             Sprite {
@@ -83,7 +83,7 @@ commands.spawn((
                 UiLayout::window().pos((Rh(40.0), Rl(50.0))).anchor(Anchor::CenterLeft).pack(),
                 UiColor::new(vec![
                     (UiBase::id(), Color::BEVYPUNK_RED),
-                    (UiHover::id(), Color::BEVYPUNK_YELLOW.with_alpha(1.2))
+                    (UiHover::id(), Color::BEVYPUNK_YELLOW.with_alpha(1.0))
                 ]),
                 UiHover::new().forward_speed(20.0).backward_speed(4.0),
                 // Here we specify the text height proportional to the parent node
@@ -91,8 +91,8 @@ commands.spawn((
                 // You can attach text like this
                 Text2d::new("Click me!"),
                 TextFont {
-                    font: asset_server.load("fonts/semibold.ttf"),
-                    font_size: 64.0,
+                    font: asset_server.load("fonts/semibold.ttf").into(),
+                    font_size: FontSize::Px(64.0),
                     ..Default::default()
                 },
                 // Make sure it does not cover the bounding zone of parent
@@ -104,7 +104,7 @@ commands.spawn((
     .observe(hover_set::<Pointer<Over>, true>)
     .observe(hover_set::<Pointer<Out>, false>)
     // Interactivity is done through observers, you can query anything here
-    .observe(|_: Trigger<Pointer<Click>>| {
+    .observe(|_: On<Pointer<Click>>| {
         println!("I was clicked!");
     });
 });
